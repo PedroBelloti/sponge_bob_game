@@ -1,6 +1,6 @@
-# FORA DO CARDUME
+# Fenda do Biquini - FORA DO CARDUME
 
-## Game Design Document — v2.0
+## Game Design Document — v1.0
 >
 > *"Toda história de vilão é uma história de pertencimento que deu errado."*
 
@@ -16,7 +16,7 @@
 | **Plataforma** | Web (Browser) |
 | **Universo** | Bob Esponja — Fenda do Biquini |
 | **Protagonista** | Plankton |
-| **Versão** | GDD v2.0 |
+| **Versão** | GDD v1.0 |
 
 ---
 
@@ -26,11 +26,13 @@
 
 **Cenário:** Siri Cascudo, noite.
 
-Plankton invade com sua máquina robô, Karen integrada ao cockpit. O jogador controla o robô destruindo o restaurante para chegar até a fórmula. Durante a invasão, os clientes tentam fugir — destroços caem, o caos é real.
+Plankton invade com sua máquina robô, Karen integrada ao cockpit. O jogador controla o bob esponja no restaurante para deter Plankton e impedir que ele chegue até a fórmula. Durante a invasão, os clientes tentam fugir — destroços caem por cima deles, o caos é real.
 
-**A ilusão:** O jogo apresenta visualmente que clientes foram atingidos pelos destroços. Não há confirmação explícita de morte, mas a câmera sugere. Plankton pega a fórmula.
+**A ilusão:** O jogo apresenta visualmente que clientes foram atingidos pelos destroços. Não há confirmação explícita de morte, mas a câmera sugere. Plankton pega a fórmula e foge ao ver o caos instaurado.
 
 **A dúvida — Primeira escolha do jogo:**
+
+*Plankton reflete:*
 
 - *"Não era pra ter acontecido assim."* → primeira escolha empática
 - *"Não importa. Temos a fórmula."* → primeira escolha egoísta
@@ -43,7 +45,7 @@ Plankton invade com sua máquina robô, Karen integrada ao cockpit. O jogador co
 
 O jogo **nunca** mostra "escolha boa / escolha ruim". O jogador vê opções de diálogo neutras. O que acumula por baixo é um **peso moral invisível** que determina dois fatores críticos:
 
-### 1 — Karen via LLM
+### 1 — Karen via LLM / IA
 
 Karen absorve o histórico de escolhas e responde organicamente.
 
@@ -120,7 +122,7 @@ Prólogo → Fase 1 → Fase 2 → Fase 3 → Fase 4 → Escolha da Skill → Bo
 
 | Fase | Boss | Local | Aprendizado |
 |---|---|---|---|
-| Prólogo | Robô do Plankton vs. Heróis | Siri Cascudo | — |
+| Prólogo | Robô do Plankton | Siri Cascudo | — |
 | 1 | Patrick Estrela | Debaixo da Pedra | Aceitação |
 | 2 | Lula Molusco | Sala de Teatro | Identificação |
 | 3 | Sandy Bochechas | Cúpula Submarina | Reconhecimento |

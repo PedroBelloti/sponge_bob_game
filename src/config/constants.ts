@@ -32,11 +32,18 @@ export const CONSTANTS = {
   CURRENT_CHANGE_INTERVAL: 15000,
   VULNERABILITY_WINDOW: 2000,
 
+  // Dash — compartilhado entre personagens jogáveis
+  PLAYER_DASH_SPEED: 390,      // px/s durante o dash
+  PLAYER_DASH_DURATION: 180,   // ms de burst antes de retornar ao controle normal
+  PLAYER_DASH_COOLDOWN: 500,   // ms de espera até poder usar novamente
+
   // Prólogo — Bob jogável
   PLANKTON_PROLOGO_HP: 50,
-  BOB_PROLOGO_SPEED: 220,
+  BOB_PROLOGO_FIRE_INTERVAL: 250,   // ms entre cada bala (segurar = mesmo ritmo que clicar)
+  BOB_PROLOGO_SPEED: 200,
   BOB_PROLOGO_JUMP_VELOCITY: 550,
   BOB_PROLOGO_BULLET_SPEED: 480,
-  PROLOGO_PROJECTILE_SPEED: 320,
+  PROLOGO_PROJECTILE_SPEED: 350,
   PROLOGO_SPAWN_INTERVAL: 2000,
+  PROLOGO_ROBO_PROJECTILE_SPEED: 300,
 } as const;
