@@ -10,6 +10,7 @@ interface EventMap {
   'skill:activated': { subAttack: 'primary' | 'secondary' };
   'phase:complete': { phase: number; bossId: BossId };
   'game:save': undefined;
+  'prologo:bob-derrotado': undefined;
 }
 
 type EventCallback<T> = (data: T) => void;

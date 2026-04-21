@@ -16,8 +16,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.time.delayedCall(500, () => {
-      this.scene.start('MenuScene');
+    this.time.delayedCall(800, () => {
+      this.scene.start('PrologoScene');
     });
   }
 }

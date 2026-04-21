@@ -1,7 +1,8 @@
 import * as Phaser from 'phaser';
 import { CONSTANTS } from './constants';
 import { BootScene } from '../scenes/BootScene';
-import { MenuScene } from '../scenes/MenuScene';
+import { PrologoScene } from '../scenes/PrologoScene';
+import { Phase1Scene } from '../scenes/phases/Phase1Scene';
 
 export const phaserConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -15,7 +16,7 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [BootScene, MenuScene],
+  scene: [BootScene, PrologoScene, Phase1Scene],
   parent: 'game-container',
   scale: {
     mode: Phaser.Scale.FIT,

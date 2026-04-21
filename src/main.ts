@@ -1,4 +1,4 @@
-import * as Phaser from 'phaser';
-import { phaserConfig } from './config/phaser.config';
+import { mountMenuOverlay } from './ui/MenuOverlay';
+import { launchGame } from './core/GameLauncher';
 
-new Phaser.Game(phaserConfig);
+mountMenuOverlay(launchGame);

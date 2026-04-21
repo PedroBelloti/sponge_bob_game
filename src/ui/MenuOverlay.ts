@@ -55,7 +55,8 @@ export function mountMenuOverlay(onStart: () => void): void {
     if (e.target === overlay.querySelector('#howto-modal')) hideModal();
   });
 
-  document.body.appendChild(overlay);
+  const container = document.getElementById('menu-container') ?? document.body;
+  container.appendChild(overlay);
   syncButtons();
 }
 
