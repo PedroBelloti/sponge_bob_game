@@ -5,6 +5,15 @@ import type { GameStateData } from './GameState';
 const SAVE_KEY = 'fora-do-cardume-save';
 
 export class SaveManager {
+  private static instance: SaveManager;
+
+  private constructor() {}
+
+  static getInstance(): SaveManager {
+    if (!SaveManager.instance) SaveManager.instance = new SaveManager();
+    return SaveManager.instance;
+  }
+
   save(): void {
     const state = GameState.getInstance().toJSON();
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));

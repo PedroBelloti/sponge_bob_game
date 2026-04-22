@@ -69,6 +69,14 @@ export function unmountMenuOverlay(): void {
 // ── Keyboard & State ──────────────────────────────────────────────────────────
 
 function handleKey(e: KeyboardEvent, onStart: () => void): void {
+  const modal = _overlay?.querySelector<HTMLElement>('#howto-modal');
+  const modalOpen = modal?.style.display !== 'none' && modal?.style.display !== '';
+
+  if (modalOpen) {
+    if (e.key === 'Enter' || e.key === 'Escape') hideModal();
+    return;
+  }
+
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     e.preventDefault();
     _sel = (_sel + (e.key === 'ArrowDown' ? 1 : -1) + 2) % 2;
