@@ -206,9 +206,10 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     p.setTexture(key); // pool reaproveita sprites — textura pode estar errada
     p.setActive(true).setVisible(true);
     p.setData('damage', data.damage);
+    p.setData('effect', data.effect ?? null);
     const body = p.body as Phaser.Physics.Arcade.Body;
     body.reset(data.x, data.y);
-    body.setAllowGravity(false);
+    body.setAllowGravity(data.gravity ?? false);
     body.setVelocity(data.velocityX, data.velocityY);
 
     if (data.bounce) {
@@ -253,8 +254,15 @@ export abstract class BossPhaseScene extends Phaser.Scene {
       (_player, _proj) => {
         const proj = _proj as Phaser.Physics.Arcade.Sprite;
         const damage = proj.getData('damage') as number ?? 1;
+        const effect = proj.getData('effect') as 'freeze' | null;
         this.deactivateBossProjectile(proj);
-        if (this.plankton.receiveDamage(damage)) this.updateHUD();
+        if (this.plankton.receiveDamage(damage)) {
+          // Efeito só pega se o golpe conectou (dash/invencibilidade esquivam)
+          if (effect === 'freeze') {
+            this.plankton.applyFreezeEffect(CONSTANTS.ICE_FREEZE_DURATION_MS);
+          }
+          this.updateHUD();
+        }
       },
       undefined,
       this,

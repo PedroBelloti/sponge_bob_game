@@ -5,6 +5,7 @@ import { PrologoScene } from '../scenes/PrologoScene';
 import { DialogScene } from '../scenes/DialogScene';
 import { Phase1Scene } from '../scenes/phases/Phase1Scene';
 import { Phase2Scene } from '../scenes/phases/Phase2Scene';
+import { Phase3Scene } from '../scenes/phases/Phase3Scene';
 import { DemoEndScene } from '../scenes/DemoEndScene';
 
 export const phaserConfig: Phaser.Types.Core.GameConfig = {
@@ -20,7 +21,7 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
     },
   },
   // DialogScene deve vir DEPOIS das Phase scenes para renderizar por cima delas
-  scene: [BootScene, PrologoScene, Phase1Scene, Phase2Scene, DemoEndScene, DialogScene],
+  scene: [BootScene, PrologoScene, Phase1Scene, Phase2Scene, Phase3Scene, DemoEndScene, DialogScene],
   parent: 'game-container',
   scale: {
     mode: Phaser.Scale.FIT,

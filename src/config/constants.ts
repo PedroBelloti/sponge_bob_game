@@ -61,6 +61,22 @@ export const CONSTANTS = {
   BOB_PROJECTILE_SPEED: 550,
   BOB_FIRE_COOLDOWN: 380,
 
+  // Sandy Bochechas
+  SANDY_LASER_DAMAGE: 1,
+  SANDY_LASER_SPEED: 700,
+  SANDY_LASER_COUNT: 4,              // GDD: quatro lasers em sequência
+  SANDY_LASER_CHARGE_MS: 1000,       // GDD: carregamento visível de 1s
+  SANDY_LASER_GAP_MS: 650,           // intervalo entre lasers da sequência
+  SANDY_ROBOT_COOLDOWN_MS: 10000,
+  SANDY_ROBOT_DURATION_MS: 3000,     // GDD: persegue por 3 segundos
+  SANDY_ROBOT_HP: 50,                // 2 acertos de laser destroem
+  SANDY_ROBOT_SPEED: 250,
+  ICE_GRENADE_DAMAGE: 1,
+  ICE_GRENADE_COOLDOWN_MS: 4500,
+  ICE_FREEZE_DURATION_MS: 1000,      // GDD: congela por 1 segundo
+  PANEL_HP: 75,                      // 3 acertos de laser destroem
+  PANEL_CYCLE_MS: 9000,              // intervalo entre boosts do painel
+
   // Habilidade Suprema — Âncoras Amaldiçoadas (Holandês Voador)
   ANCHOR_COUNT: 4,
   ANCHOR_WARNING_MS: 600,       // aviso no chão antes da queda

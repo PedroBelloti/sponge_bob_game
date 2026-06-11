@@ -27,6 +27,20 @@ export const DIALOG_LULA: DialogConfig = {
   nextSceneData: { bossDialogDone: true },
 };
 
+export const DIALOG_SANDY: DialogConfig = {
+  bossId: 'sandy',
+  speakerName: 'SANDY BOCHECHAS',
+  lines: [
+    'Plankton! Os sensores da cúpula detectaram algo pequeno se esgueirando.',
+    'Esse fragmento da fórmula é fascinante. Energia molecular instável... estou estudando.',
+    'Se o quer de volta, vai ter que provar sua hipótese. Na prática.',
+  ],
+  choiceA: 'Você é a única aqui que de fato me entende intelectualmente.',
+  choiceB: 'Sua ciência não vale nada comparada à minha engenharia.',
+  nextScene: 'Phase3Scene',
+  nextSceneData: { bossDialogDone: true },
+};
+
 export const DIALOG_PATRICK: DialogConfig = {
   bossId: 'patrick',
   speakerName: 'PATRICK',

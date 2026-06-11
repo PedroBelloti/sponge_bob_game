@@ -35,6 +35,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
   protected lastFireTime: number = 0;
   protected isSlowed: boolean = false;
   protected slowMultiplier: number = 1.0;
+  protected isFrozen: boolean = false;
 
   protected label: Phaser.GameObjects.Text | null = null;
   protected labelOffsetY: number = 40;
@@ -43,6 +44,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
   private airDashUsed: boolean = false;
   private slowTimer: Phaser.Time.TimerEvent | null = null;
   private activeSyncTween: Phaser.Tweens.Tween | null = null;
+  private freezeTimer: Phaser.Time.TimerEvent | null = null;
 
   // Game feel — pulo
   private lastGroundedTime: number = -Infinity; // coyote time
@@ -121,6 +123,10 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
 
   private handleMovement(wasd: WASDKeys): void {
     if (this.isDashing) return;
+    if (this.isFrozen) {
+      (this.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
+      return;
+    }
     const body = this.body as Phaser.Physics.Arcade.Body;
     const speed = this.stats.speed * this.slowMultiplier;
 
@@ -149,7 +155,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     const buffered = time - this.lastJumpPressTime <= CONSTANTS.JUMP_BUFFER_MS;
     const grounded = this.isOnGround || time - this.lastGroundedTime <= CONSTANTS.COYOTE_TIME_MS;
 
-    if (buffered && grounded && !this.isCrouching) {
+    if (buffered && grounded && !this.isCrouching && !this.isFrozen) {
       body.setVelocityY(this.stats.jumpVelocity);
       this.lastJumpPressTime = -Infinity; // consome o buffer
       this.lastGroundedTime = -Infinity;  // consome o coyote (evita pulo duplo)
@@ -170,6 +176,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
 
   private handleDash(dashKey: Phaser.Input.Keyboard.Key, time: number): void {
     if (!Phaser.Input.Keyboard.JustDown(dashKey)) return;
+    if (this.isFrozen) return;
     if (time - this.lastDashTime < this.stats.dashCooldown) return;
     if (!this.isOnGround && this.airDashUsed) return;
 
@@ -327,6 +334,24 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
       this.isSlowed = false;
       this.slowMultiplier = 1.0;
       this.slowTimer = null;
+    });
+  }
+
+  // Granadas de gelo da Sandy: imobiliza por completo (GDD: congela 1s)
+  applyFreezeEffect(duration: number): void {
+    if (this.freezeTimer) {
+      this.freezeTimer.remove();
+      this.freezeTimer = null;
+    }
+
+    this.isFrozen = true;
+    this.setTint(0x81d4fa);
+    (this.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
+
+    this.freezeTimer = this.scene.time.delayedCall(duration, () => {
+      this.isFrozen = false;
+      this.clearTint();
+      this.freezeTimer = null;
     });
   }
 

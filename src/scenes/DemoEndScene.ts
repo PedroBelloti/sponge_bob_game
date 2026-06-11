@@ -61,9 +61,12 @@ export class DemoEndScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const prompt = this.add
-      .text(width / 2, height / 2 + 150, 'ENTER  Rejogar desde o Prólogo      1  Fase 1 (Patrick)      2  Fase 2 (Lula)', {
-        fontSize: '16px', color: '#FFD700',
-      })
+      .text(
+        width / 2,
+        height / 2 + 150,
+        'ENTER  Rejogar desde o Prólogo      1  Fase 1 (Patrick)      2  Fase 2 (Lula)      3  Fase 3 (Sandy)',
+        { fontSize: '16px', color: '#FFD700' },
+      )
       .setOrigin(0.5);
 
     this.tweens.add({ targets: prompt, alpha: 0.4, duration: 700, yoyo: true, repeat: -1 });
@@ -77,6 +80,9 @@ export class DemoEndScene extends Phaser.Scene {
     });
     this.input.keyboard!.once('keydown-TWO', () => {
       this.scene.start('Phase2Scene');
+    });
+    this.input.keyboard!.once('keydown-THREE', () => {
+      this.scene.start('Phase3Scene');
     });
   }
 }

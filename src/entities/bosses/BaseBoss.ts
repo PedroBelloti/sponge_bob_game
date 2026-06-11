@@ -27,6 +27,8 @@ export interface ProjectileData {
   textureKey?: string;   // default: textura padrão do boss na cena
   bounce?: boolean;      // quica nas paredes (notas do Lula na fase final)
   lifespanMs?: number;   // TTL para projéteis que não saem da tela
+  gravity?: boolean;     // trajetória em arco (granadas de gelo da Sandy)
+  effect?: 'freeze';     // efeito extra ao atingir o jogador
 }
 
 export abstract class BaseBoss extends Phaser.GameObjects.Container {
