@@ -168,7 +168,7 @@ export class PrologoScene extends Phaser.Scene {
     const barW = 120;
     const barH = 10;
     const barX = this.roboPlankton.x - barW / 2;
-    const barY = this.roboPlankton.y - 210;
+    const barY = this.roboPlankton.y - 290;
     const ratio = this.roboPlankton.getHpPercent();
 
     this.roboHpBar.clear();

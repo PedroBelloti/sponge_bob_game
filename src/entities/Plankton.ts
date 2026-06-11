@@ -21,10 +21,11 @@ export class Plankton extends PlayerBase {
     });
 
     this.setDepth(2);
-    this.labelOffsetY = 36;
+    this.labelOffsetY = 66;
+    this.walkAnimKey = 'plankton-walk';
 
     this.label = scene.add
-      .text(x, y - 36, 'PLANKTON', { fontSize: '12px', color: '#4CAF50' })
+      .text(x, y - 66, 'PLANKTON', { fontSize: '12px', color: '#4CAF50' })
       .setOrigin(0.5)
       .setDepth(10);
   }

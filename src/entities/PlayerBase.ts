@@ -40,6 +40,14 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
   protected label: Phaser.GameObjects.Text | null = null;
   protected labelOffsetY: number = 40;
 
+  // Animação de caminhada (opcional). Subclasses com animação definem a
+  // chave; quem usa sprite estático deixa null e mantém o frame fixo.
+  protected walkAnimKey: string | null = null;
+
+  // Textura inicial — cada frame da caminhada é uma imagem separada, então
+  // "parar no frame 0" significa voltar para esta textura.
+  protected readonly idleTextureKey: string;
+
   private projectilePool!: Phaser.Physics.Arcade.Group;
   private airDashUsed: boolean = false;
   private slowTimer: Phaser.Time.TimerEvent | null = null;
@@ -53,6 +61,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
 
   constructor(scene: Phaser.Scene, x: number, y: number, texture: string, stats: PlayerStats) {
     super(scene, x, y, texture);
+    this.idleTextureKey = texture;
     this.stats = stats;
     this.currentHp = stats.maxHp;
 
@@ -112,6 +121,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     this.handleJump(wasd, spaceKey, time);
     this.handleDash(dashKey, time);
     this.handleFire(pointer, time);
+    this.updateAnimation();
     this.cullingProjectiles();
 
     if (this.label) {
@@ -140,6 +150,24 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
       this.setFlipX(false);
     } else {
       body.setVelocityX(0);
+    }
+  }
+
+  // Caminhada anda apenas no chão e em movimento; no ar/parado volta à pose
+  // inicial (cada frame é uma textura separada — não há "frame 0" para setar).
+  private updateAnimation(): void {
+    if (!this.walkAnimKey) return;
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    const walking =
+      this.isOnGround && !this.isDashing && !this.isFrozen && Math.abs(body.velocity.x) > 5;
+
+    if (walking) {
+      if (this.anims.currentAnim?.key !== this.walkAnimKey || !this.anims.isPlaying) {
+        this.play(this.walkAnimKey, true);
+      }
+    } else if (this.anims.isPlaying) {
+      this.stop();
+      this.setTexture(this.idleTextureKey);
     }
   }
 

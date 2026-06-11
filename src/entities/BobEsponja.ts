@@ -21,9 +21,11 @@ export class BobEsponja extends PlayerBase {
     });
 
     this.setDepth(2);
+    this.labelOffsetY = 70;
+    this.walkAnimKey = 'bob-walk';
 
     this.label = scene.add
-      .text(x, y - 40, 'BOB', { fontSize: '14px', color: '#000000', fontStyle: 'bold' })
+      .text(x, y - 70, 'BOB', { fontSize: '14px', color: '#000000', fontStyle: 'bold' })
       .setOrigin(0.5)
       .setDepth(10);
   }

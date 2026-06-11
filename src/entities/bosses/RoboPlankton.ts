@@ -4,7 +4,7 @@ import type { BossId } from '../../core/EventBus';
 import { BaseBoss } from './BaseBoss';
 import type { BossConfig, ProjectileData } from './BaseBoss';
 
-const EYE_OFFSET_Y = -130;
+const EYE_OFFSET_Y = -190;
 
 export class RoboPlankton extends BaseBoss {
   static readonly MAX_HP = CONSTANTS.PLANKTON_PROLOGO_HP;
@@ -37,6 +37,15 @@ export class RoboPlankton extends BaseBoss {
   }
 
   buildVisual(): void {
+    // Sprite real do robô, se carregado no BootScene. Ancorado pela base
+    // (origin inferior) no y=0 do container — onde ficava a base desenhada.
+    if (this.scene.textures.exists('roboplankton')) {
+      const img = this.scene.add.image(0, 5, 'roboplankton').setOrigin(0.5, 1);
+      img.setDisplaySize(210, 330); // bbox do hit: ~200 larg × 265 alt
+      this.add(img);
+      return;
+    }
+
     const g = this.scene.add.graphics();
 
     // Arms (behind body)
@@ -94,7 +103,7 @@ export class RoboPlankton extends BaseBoss {
   // ── Helpers ───────────────────────────────────────────────────
 
   getHitBounds(): Phaser.Geom.Rectangle {
-    return new Phaser.Geom.Rectangle(this.x - 80, this.y - 190, 160, 195);
+    return new Phaser.Geom.Rectangle(this.x - 100, this.y - 260, 200, 265);
   }
 
   private buildSingle(ex: number, ey: number, tx: number, ty: number): ProjectileData[] {

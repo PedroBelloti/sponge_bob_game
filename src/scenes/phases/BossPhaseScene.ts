@@ -180,7 +180,7 @@ export abstract class BossPhaseScene extends Phaser.Scene {
   // ── Plankton + controles ──────────────────────────────────────
 
   private buildPlankton(height: number): void {
-    this.plankton = new Plankton(this, 150, height - 50 - 44);
+    this.plankton = new Plankton(this, 150, height - 50 - 60);
     this.physics.add.collider(this.plankton, this.ground);
     this.physics.add.collider(this.plankton, this.platforms);
 
