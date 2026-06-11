@@ -54,3 +54,18 @@ export const DIALOG_PATRICK: DialogConfig = {
   nextScene: 'Phase1Scene',
   nextSceneData: { bossDialogDone: true },
 };
+
+export const DIALOG_BOB: DialogConfig = {
+  bossId: 'bob',
+  speakerName: 'BOB ESPONJA',
+  lines: [
+    'Plankton! Você destruiu o Siri Cascudo e colocou a todos em perigo!',
+    'Esse último fragmento da fórmula vai ficar guardado onde você nunca mais possa alcançá-lo.',
+    'Sinto muito, mas não posso deixar você levar isso.',
+  ],
+  choiceA: 'Eu não queria que ninguém se machucasse lá dentro.',
+  choiceB: 'Foi necessário. A fórmula era minha por direito.',
+  nextScene: 'Phase4Scene',
+  nextSceneData: { bossDialogDone: true },
+};
+

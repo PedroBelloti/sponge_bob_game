@@ -15,6 +15,8 @@ const BAR_H = 14;
 const MIN_DISPLAY_MS = 1200;
 
 export class BootScene extends Phaser.Scene {
+  public static nextScene: string | undefined = undefined;
+
   private fontsReady!: Promise<void>;
   private barFill!: Phaser.GameObjects.Rectangle;
   private percentText!: Phaser.GameObjects.Text;
@@ -63,11 +65,12 @@ export class BootScene extends Phaser.Scene {
     this.load.image('roboplankton', 'assets/roboplankton.png');
 
     // ── Cenários reais (1280x720, recortados de docs/cenario_*.jpeg) ──
-    // O do Bob ainda não existe — a fase dele não foi construída.
     this.load.image('bg-prologo', 'assets/bg-prologo.jpg');
     this.load.image('bg-patrick', 'assets/bg-patrick.jpg');
     this.load.image('bg-lula',    'assets/bg-lula.jpg');
     this.load.image('bg-sandy',   'assets/bg-sandy.jpg');
+    this.load.image('bg-bob',     'assets/bg-bob.jpg');
+    this.load.image('bob-surf',   'assets/surf-bg.png');
   }
 
   // ── Tela de carregamento — estética "diário de mergulho" do menu ──
@@ -193,14 +196,18 @@ export class BootScene extends Phaser.Scene {
       duration: 180,
       ease: 'Cubic.easeOut',
       onComplete: () => {
-        // Flash gold na barra e mergulho para o prólogo
+        // Flash gold na barra e mergulho para a cena selecionada
         this.tweens.add({
           targets: this.barFill,
           alpha: 0.4,
           duration: 90,
           yoyo: true,
           repeat: 1,
-          onComplete: () => fadeToScene(this, 'PrologoScene', undefined, 450),
+          onComplete: () => {
+            const target = BootScene.nextScene || 'PrologoScene';
+            BootScene.nextScene = undefined;
+            fadeToScene(this, target, undefined, 450);
+          },
         });
       },
     });

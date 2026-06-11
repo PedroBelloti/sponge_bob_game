@@ -1,3 +1,6 @@
+import { BootScene } from '../scenes/BootScene';
+import { GameState } from '../state/GameState';
+
 const Y = '#ffd400';
 const O = '#ff9a1f';
 const C = '#4dd0e1';
@@ -17,6 +20,75 @@ function mulberry32(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+const PHASES = [
+  {
+    key: 'PrologoScene',
+    id: 'PROL',
+    num: '00',
+    title: 'ROBOPLANKTON',
+    subtitle: 'O Ataque no Siri Cascudo',
+    desc: 'Combata a ameaça mecânica e proteja a fórmula secreta.',
+    accent: '#4db0e1',
+    glow: 'rgba(77, 208, 225, 0.3)',
+    bg: 'linear-gradient(135deg, rgba(77, 208, 225, 0.1) 0%, rgba(12, 42, 82, 0.4) 100%)'
+  },
+  {
+    key: 'Phase1Scene',
+    id: 'FASE 1',
+    num: '01',
+    title: 'PATRICK ESTRELA',
+    subtitle: 'Arena de Rosquinhas',
+    desc: 'Desvie dos doces gigantes em um teste de agilidade.',
+    accent: '#f48fb1',
+    glow: 'rgba(244, 143, 177, 0.3)',
+    bg: 'linear-gradient(135deg, rgba(244, 143, 177, 0.1) 0%, rgba(12, 42, 82, 0.4) 100%)'
+  },
+  {
+    key: 'Phase2Scene',
+    id: 'FASE 2',
+    num: '02',
+    title: 'LULA MOLUSCO',
+    subtitle: 'Sinfonia da Discórdia',
+    desc: 'Sobreviva ao concerto enfurecido e suas notas explosivas.',
+    accent: '#26c6da',
+    glow: 'rgba(38, 198, 218, 0.3)',
+    bg: 'linear-gradient(135deg, rgba(38, 198, 218, 0.1) 0%, rgba(12, 42, 82, 0.4) 100%)'
+  },
+  {
+    key: 'Phase3Scene',
+    id: 'FASE 3',
+    num: '03',
+    title: 'SANDY BOCHECHAS',
+    subtitle: 'Domo da Cúpula de Vidro',
+    desc: 'Enfrente golpes velozes de karatê e bolotas de carvalho.',
+    accent: '#ba68c8',
+    glow: 'rgba(186, 164, 200, 0.3)',
+    bg: 'linear-gradient(135deg, rgba(186, 164, 200, 0.1) 0%, rgba(12, 42, 82, 0.4) 100%)'
+  },
+  {
+    key: 'Phase4Scene',
+    id: 'FASE 4',
+    num: '04',
+    title: 'BOB ESPONJA',
+    subtitle: 'Desafio do Mestre-Cuca',
+    desc: 'Hambúrgueres flamejantes e a lendária espátula dourada.',
+    accent: '#ffd54f',
+    glow: 'rgba(255, 213, 79, 0.3)',
+    bg: 'linear-gradient(135deg, rgba(255, 213, 79, 0.1) 0%, rgba(12, 42, 82, 0.4) 100%)'
+  },
+  {
+    key: 'FinalScene',
+    id: 'FINAL',
+    num: '05',
+    title: 'DUPLA DINÂMICA',
+    subtitle: 'Caverna do Homem Sereia',
+    desc: 'Enfrente Homem Sereia e Mexilhãozinho no duelo supremo.',
+    accent: '#ff9a1f',
+    glow: 'rgba(255, 154, 31, 0.3)',
+    bg: 'linear-gradient(135deg, rgba(255, 154, 31, 0.1) 0%, rgba(12, 42, 82, 0.4) 100%)'
+  }
+];
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -40,6 +112,7 @@ export function mountMenuOverlay(onStart: () => void): void {
     buildContentHTML() +
     buildFooterHTML() +
     buildModalHTML() +
+    buildFreePlayModalHTML() +
     buildFlashHTML()
   );
 
@@ -48,11 +121,37 @@ export function mountMenuOverlay(onStart: () => void): void {
 
   overlay.querySelector('#btn-jogar')?.addEventListener('click', () => triggerStart(onStart));
   overlay.querySelector('#btn-jogar')?.addEventListener('mouseenter', () => { _sel = 0; syncButtons(); });
+
+  overlay.querySelector('#btn-freeplay')?.addEventListener('click', showFreePlayModal);
+  overlay.querySelector('#btn-freeplay')?.addEventListener('mouseenter', () => { _sel = 1; syncButtons(); });
+
   overlay.querySelector('#btn-howto')?.addEventListener('click', showModal);
-  overlay.querySelector('#btn-howto')?.addEventListener('mouseenter', () => { _sel = 1; syncButtons(); });
+  overlay.querySelector('#btn-howto')?.addEventListener('mouseenter', () => { _sel = 2; syncButtons(); });
+
   overlay.querySelector('#howto-close')?.addEventListener('click', hideModal);
   overlay.querySelector('#howto-modal')?.addEventListener('click', (e) => {
     if (e.target === overlay.querySelector('#howto-modal')) hideModal();
+  });
+
+  overlay.querySelector('#freeplay-close')?.addEventListener('click', hideFreePlayModal);
+  overlay.querySelector('#freeplay-modal')?.addEventListener('click', (e) => {
+    if (e.target === overlay.querySelector('#freeplay-modal')) hideFreePlayModal();
+  });
+
+  overlay.querySelectorAll('.freeplay-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      const sceneKey = card.getAttribute('data-scene');
+      if (sceneKey) {
+        GameState.getInstance().reset();
+
+        const skillRadio = overlay.querySelector('input[name="freeplay-skill"]:checked') as HTMLInputElement | null;
+        const selectedSkill = (skillRadio?.value as 'holandes' | 'bob') || 'holandes';
+        GameState.getInstance().unlockSkill(selectedSkill);
+
+        BootScene.nextScene = sceneKey;
+        triggerStart(onStart);
+      }
+    });
   });
 
   const container = document.getElementById('menu-container') ?? document.body;
@@ -72,14 +171,22 @@ function handleKey(e: KeyboardEvent, onStart: () => void): void {
   const modal = _overlay?.querySelector<HTMLElement>('#howto-modal');
   const modalOpen = modal?.style.display !== 'none' && modal?.style.display !== '';
 
+  const fpModal = _overlay?.querySelector<HTMLElement>('#freeplay-modal');
+  const fpModalOpen = fpModal?.style.display !== 'none' && fpModal?.style.display !== '';
+
   if (modalOpen) {
     if (e.key === 'Enter' || e.key === 'Escape') hideModal();
     return;
   }
 
+  if (fpModalOpen) {
+    if (e.key === 'Escape') hideFreePlayModal();
+    return;
+  }
+
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     e.preventDefault();
-    _sel = (_sel + (e.key === 'ArrowDown' ? 1 : -1) + 2) % 2;
+    _sel = (_sel + (e.key === 'ArrowDown' ? 1 : -1) + 3) % 3;
     syncButtons();
   } else if (e.key === 'Enter' && !_pressed) {
     _pressed = true;
@@ -87,6 +194,7 @@ function handleKey(e: KeyboardEvent, onStart: () => void): void {
     setTimeout(() => {
       _pressed = false;
       if (_sel === 0) triggerStart(onStart);
+      else if (_sel === 1) showFreePlayModal();
       else showModal();
     }, 220);
   }
@@ -120,12 +228,28 @@ function hideModal(): void {
   if (m) m.style.display = 'none';
 }
 
+function showFreePlayModal(): void {
+  const m = _overlay?.querySelector<HTMLElement>('#freeplay-modal');
+  if (!m) return;
+  m.style.display = 'flex';
+  m.style.animation = 'none';
+  m.offsetHeight;
+  m.style.animation = 'modal-in .25s ease';
+}
+
+function hideFreePlayModal(): void {
+  const m = _overlay?.querySelector<HTMLElement>('#freeplay-modal');
+  if (m) m.style.display = 'none';
+}
+
 function syncButtons(): void {
   if (!_overlay) return;
   const b0 = _overlay.querySelector<HTMLElement>('#btn-jogar');
-  const b1 = _overlay.querySelector<HTMLElement>('#btn-howto');
+  const b1 = _overlay.querySelector<HTMLElement>('#btn-freeplay');
+  const b2 = _overlay.querySelector<HTMLElement>('#btn-howto');
   if (b0) applyBtnStyle(b0, _sel === 0, true,  _pressed && _sel === 0);
   if (b1) applyBtnStyle(b1, _sel === 1, false, _pressed && _sel === 1);
+  if (b2) applyBtnStyle(b2, _sel === 2, false, _pressed && _sel === 2);
 }
 
 function applyBtnStyle(btn: HTMLElement, sel: boolean, primary: boolean, pressed: boolean): void {
@@ -286,9 +410,19 @@ function buildContentHTML(): string {
             <span class="btn-arrow" style="font-size:14px;transition:transform .2s;">▶</span>
           </div>
         </button>
-        <button id="btn-howto" style="text-align:left;padding:14px 18px 14px 22px;font-family:${RUSSO};color:#fff;cursor:pointer;border-radius:2px;transition:all .15s ease;display:flex;align-items:center;justify-content:space-between;gap:16px;backdrop-filter:blur(2px);">
+        <button id="btn-freeplay" style="text-align:left;padding:14px 18px 14px 22px;font-family:${RUSSO};color:#fff;cursor:pointer;border-radius:2px;transition:all .15s ease;display:flex;align-items:center;justify-content:space-between;gap:16px;backdrop-filter:blur(2px);">
           <div style="display:flex;align-items:center;gap:14px;">
             <span class="btn-num" style="font-family:${MONO};font-size:11px;letter-spacing:1.5px;font-weight:700;transition:color .15s;">02</span>
+            <span class="btn-label" style="font-size:20px;font-weight:800;letter-spacing:3px;transition:color .15s,text-shadow .15s;">JOGO LIVRE</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-family:${MONO};font-size:11px;letter-spacing:1.5px;color:rgba(220,235,255,0.35);text-transform:lowercase;">
+            <span>Escolher fase</span>
+            <span class="btn-arrow" style="font-size:14px;transition:transform .2s;">▶</span>
+          </div>
+        </button>
+        <button id="btn-howto" style="text-align:left;padding:14px 18px 14px 22px;font-family:${RUSSO};color:#fff;cursor:pointer;border-radius:2px;transition:all .15s ease;display:flex;align-items:center;justify-content:space-between;gap:16px;backdrop-filter:blur(2px);">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <span class="btn-num" style="font-family:${MONO};font-size:11px;letter-spacing:1.5px;font-weight:700;transition:color .15s;">03</span>
             <span class="btn-label" style="font-size:20px;font-weight:800;letter-spacing:3px;transition:color .15s,text-shadow .15s;">COMO JOGAR</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px;font-family:${MONO};font-size:11px;letter-spacing:1.5px;color:rgba(220,235,255,0.35);text-transform:lowercase;">
@@ -398,6 +532,83 @@ function buildFlashHTML(): string {
   return `<div id="start-flash" style="position:fixed;inset:0;z-index:10001;background:${Y};display:none;align-items:center;justify-content:center;color:#0a1833;font-family:${RUSSO};font-size:44px;letter-spacing:6px;font-weight:900;">INICIANDO MERGULHO...</div>`;
 }
 
+function buildFreePlayModalHTML(): string {
+  const cardsHTML = PHASES.map((p) => {
+    return `
+    <div class="freeplay-card" data-scene="${p.key}" style="
+      background: ${p.bg};
+      border: 1px solid rgba(220, 235, 255, 0.12);
+      border-radius: 6px;
+      padding: 20px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      --accent-color: ${p.accent};
+      --glow-color: ${p.glow};
+    ">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-family:${MONO};font-size:10px;letter-spacing:2px;color:${p.accent};font-weight:700;">${p.id}</span>
+        <span style="font-family:${MONO};font-size:11px;color:rgba(220,235,255,0.3);font-weight:700;">N° ${p.num}</span>
+      </div>
+      <div>
+        <h3 class="card-title" style="margin:0;font-family:${RUSSO};font-size:18px;letter-spacing:1.5px;color:#fff;transition:color 0.2s;">${p.title}</h3>
+        <div style="font-family:${MONO};font-size:11px;color:rgba(220,235,255,0.7);margin-top:2px;font-style:italic;">${p.subtitle}</div>
+      </div>
+      <p style="margin:8px 0 0;font-family:${MONO};font-size:11px;line-height:1.5;color:rgba(220,235,255,0.55);flex-grow:1;">
+        ${p.desc}
+      </p>
+      <div style="display:flex;justify-content:flex-end;align-items:center;margin-top:8px;font-family:${MONO};font-size:10px;letter-spacing:1px;color:${p.accent};font-weight:700;">
+        <span>JOGAR ▶</span>
+      </div>
+    </div>
+    `;
+  }).join('');
+
+  return `
+  <div id="freeplay-modal" style="position:fixed;inset:0;background:rgba(2,6,16,0.9);backdrop-filter:blur(12px);z-index:10000;display:none;align-items:center;justify-content:center;">
+    <div style="background:linear-gradient(180deg,#0a1f3c 0%,#051126 100%);border:1.5px solid ${Y};box-shadow:0 0 0 1px rgba(255,212,0,0.2),0 0 60px rgba(255,212,0,0.25),0 20px 80px rgba(0,0,0,0.7);border-radius:8px;padding:36px;max-width:850px;width:95%;color:#e8f4ff;font-family:${MONO};position:relative;display:flex;flex-direction:column;gap:20px;">
+      
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:11px;letter-spacing:3px;color:${C};text-transform:uppercase;margin-bottom:6px;">◆ MODO EXPEDIÇÃO</div>
+          <h2 style="margin:0;font-family:${RUSSO};font-size:28px;letter-spacing:2px;color:${Y};text-shadow:0 0 20px rgba(255,212,0,0.4);">JOGO LIVRE</h2>
+        </div>
+        <div style="display:flex;gap:20px;align-items:center;margin-right:20px;">
+          <div style="display:flex;gap:12px;align-items:center;background:rgba(5,15,34,0.6);border:1px solid rgba(77,208,225,0.2);padding:8px 14px;border-radius:4px;font-family:${MONO};font-size:11px;">
+            <span style="color:rgba(220,235,255,0.5);font-weight:700;letter-spacing:1px;text-transform:uppercase;">HAB. SUPREMA:</span>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:#fff;font-weight:700;">
+              <input type="radio" name="freeplay-skill" value="holandes" checked style="accent-color:${Y};cursor:pointer;">
+              <span style="color:#6fff8a;">HOLANDÊS (ÂNCORAS)</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:#fff;font-weight:700;">
+              <input type="radio" name="freeplay-skill" value="bob" style="accent-color:${Y};cursor:pointer;">
+              <span style="color:#ffd400;">BOB ESPONJA (ONDA SURF)</span>
+            </label>
+          </div>
+          <button id="freeplay-close" style="background:transparent;border:none;color:rgba(220,235,255,0.5);font-size:28px;cursor:pointer;font-family:${MONO};line-height:1;transition:color 0.2s;" onmouseenter="this.style.color='${Y}'" onmouseleave="this.style.color='rgba(220,235,255,0.5)'">&times;</button>
+        </div>
+      </div>
+
+      <!-- Grid of Levels -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:10px;">
+        ${cardsHTML}
+      </div>
+
+      <!-- Footer / Instructions -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:10px;letter-spacing:2px;color:rgba(220,235,255,0.4);text-transform:uppercase;">
+        <span>Use o mouse para escolher a fase desejada</span>
+        <span>Pressione ESC para voltar</span>
+      </div>
+    </div>
+  </div>`;
+}
+
 // ── CSS Injection ─────────────────────────────────────────────────────────────
 
 function injectCSS(): void {
@@ -419,6 +630,16 @@ function injectCSS(): void {
     @keyframes flash-in{0%{opacity:0}40%{opacity:1}100%{opacity:1}}
     #menu-overlay{position:fixed;inset:0;z-index:10000;overflow:hidden;font-family:"Russo One",Impact,sans-serif;color:#e8f4ff;background:#0a1833;}
     #menu-overlay button{all:unset;box-sizing:border-box;}
+
+    .freeplay-card:hover {
+      transform: translateY(-4px) scale(1.02);
+      border-color: var(--accent-color) !important;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 16px var(--glow-color) !important;
+    }
+    .freeplay-card:hover .card-title {
+      color: var(--accent-color) !important;
+      text-shadow: 0 0 10px var(--glow-color);
+    }
   `;
   document.head.appendChild(s);
 }

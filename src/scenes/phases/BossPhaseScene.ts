@@ -42,7 +42,9 @@ export abstract class BossPhaseScene extends Phaser.Scene {
   private dashKey!: Phaser.Input.Keyboard.Key;
   private skillKey!: Phaser.Input.Keyboard.Key;
 
-  private bossProjectilePool!: Phaser.Physics.Arcade.Group;
+  protected bossProjectilePool!: Phaser.Physics.Arcade.Group;
+  private surfWave: Phaser.GameObjects.Container | null = null;
+  private surfWaveHitBoss = false;
   private bossHpFill!: Phaser.GameObjects.Rectangle;
   private bossHpChip!: Phaser.GameObjects.Rectangle;
 
@@ -161,7 +163,67 @@ export abstract class BossPhaseScene extends Phaser.Scene {
 
     // Habilidade Suprema
     if (Phaser.Input.Keyboard.JustDown(this.skillKey) && this.skillCharge.consume()) {
-      this.castAnchors();
+      const skill = GameState.getInstance().getData().skillUnlocked;
+      if (skill === 'bob') {
+        this.castSurfWave();
+      } else {
+        this.castAnchors();
+      }
+    }
+
+    // Update wave physics & collision
+    const wave = this.surfWave;
+    if (wave && wave.active) {
+      const waveX = wave.x;
+      const waveY = wave.y;
+      const { width } = this.scale;
+
+      if (this.time.now % 100 < 20) {
+        this.cameras.main.shake(100, 0.002);
+      }
+      
+      const dotTex = this.textures.exists('bubble-texture') ? 'bubble-texture' : makeParticleDot(this);
+      const splash = this.add.particles(waveX - 40, waveY - 10, dotTex, {
+        lifespan: 600,
+        speedX: { min: -150, max: -50 },
+        speedY: { min: -180, max: -80 },
+        scale: { start: 0.8, end: 0.1 },
+        alpha: { start: 0.6, end: 0 },
+        tint: 0x4dd0e1,
+        maxParticles: 3,
+      });
+      this.time.delayedCall(700, () => splash.destroy());
+
+      // Overlap com o Boss
+      if (!this.surfWaveHitBoss && !this.boss.isBossDefeated()) {
+        const bossBounds = this.boss.getHitBounds();
+        const waveRect = new Phaser.Geom.Rectangle(waveX - 100, waveY - 340, 200, 340);
+        if (Phaser.Geom.Intersects.RectangleToRectangle(waveRect, bossBounds)) {
+          this.surfWaveHitBoss = true;
+          this.boss.receiveDamage(150); // Onda gigante causa 150 de dano!
+          impactBurst(this, this.boss.x, this.boss.y, { core: 0xffffff, mid: 0x4dd0e1, halo: 0xffd400 }, {
+            particles: 25,
+            scale: 2.0,
+            depth: 10,
+          });
+        }
+      }
+
+      // Overlap com Projéteis
+      this.bossProjectilePool.getChildren().forEach((obj) => {
+        const proj = obj as Phaser.Physics.Arcade.Sprite;
+        if (proj.active) {
+          const waveRect = new Phaser.Geom.Rectangle(waveX - 100, waveY - 340, 200, 340);
+          if (Phaser.Geom.Intersects.RectangleToRectangle(waveRect, proj.getBounds())) {
+            this.deactivateBossProjectile(proj);
+            impactBurst(this, proj.x, proj.y, ATTACK_PALETTES.bob);
+          }
+        }
+      });
+
+      if (waveX > width + 180) {
+        this.destroySurfWave();
+      }
     }
 
     this.checkLaserBossOverlap();
@@ -442,7 +504,7 @@ export abstract class BossPhaseScene extends Phaser.Scene {
       .setDepth(10);
   }
 
-  private updateHUD(): void {
+  protected updateHUD(): void {
     const hp = this.plankton.getHp();
     if (hp === this.planktonHpLast) return;
     const lost = this.planktonHpLast - hp;
@@ -601,9 +663,16 @@ export abstract class BossPhaseScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    // Diálogo não se repete no retry — a escolha já está registrada
-    this.input.keyboard!.once('keydown-R', () => {
-      this.scene.restart({ bossDialogDone: true });
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'r' || e.key === 'R') {
+        window.removeEventListener('keydown', onKeyDown);
+        this.scene.restart({ bossDialogDone: true });
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('keydown', onKeyDown);
     });
   }
 
@@ -703,6 +772,192 @@ export abstract class BossPhaseScene extends Phaser.Scene {
       this.boss.receiveDamage(CONSTANTS.ANCHOR_DAMAGE_DIRECT);
     } else if (dist <= CONSTANTS.ANCHOR_SPLASH_RADIUS) {
       this.boss.receiveDamage(CONSTANTS.ANCHOR_DAMAGE_SPLASH);
+    }
+  }
+
+  // ── Habilidade Suprema — Onda de Surf (Bob Esponja) ───────────
+
+  private drawBezierCurve(
+    g: Phaser.GameObjects.Graphics,
+    x0: number, y0: number,
+    x1: number, y1: number,
+    x2: number, y2: number,
+    x3: number, y3: number,
+    segments = 16
+  ): void {
+    for (let i = 1; i <= segments; i++) {
+      const t = i / segments;
+      const mt = 1 - t;
+      const c0 = mt * mt * mt;
+      const c1 = 3 * mt * mt * t;
+      const c2 = 3 * mt * t * t;
+      const c3 = t * t * t;
+      
+      const x = c0 * x0 + c1 * x1 + c2 * x2 + c3 * x3;
+      const y = c0 * y0 + c1 * y1 + c2 * y2 + c3 * y3;
+      g.lineTo(x, y);
+    }
+  }
+
+  private castSurfWave(): void {
+    EventBus.emit('skill:activated', { subAttack: 'secondary' });
+
+    const { width, height } = this.scale;
+    const groundY = height - 50;
+
+    this.destroySurfWave();
+    this.surfWaveHitBoss = false;
+
+    // Dark cyan flash on activation
+    const flash = this.add.rectangle(width / 2, height / 2, width, height, 0x00bcd4, 0.25).setDepth(15);
+    this.tweens.add({ targets: flash, alpha: 0, duration: 600, onComplete: () => flash.destroy() });
+    this.cameras.main.shake(300, 0.005);
+
+    // Create wave container (positioned offscreen initially)
+    const container = this.add.container(-250, groundY).setDepth(10);
+
+    // 1. Trailing Wave Graphics
+    const waveGraphics = this.add.graphics();
+    
+    // Dark ocean blue body (matches bottom of image: 0x0375a9)
+    waveGraphics.fillStyle(0x0375a9, 0.95);
+    waveGraphics.beginPath();
+    waveGraphics.moveTo(-320, 0);
+    // Left curve to crest at (0, -175)
+    this.drawBezierCurve(waveGraphics, -320, 0, -220, -45, -100, -130, 0, -175);
+    // Right curve from crest to ground at (120, 0)
+    this.drawBezierCurve(waveGraphics, 0, -175, 50, -175, 95, -85, 120, 0);
+    waveGraphics.lineTo(120, 0);
+    waveGraphics.lineTo(-320, 0);
+    waveGraphics.closePath();
+    waveGraphics.fill();
+
+    // Medium blue active water layer (matches middle of image: 0x0c90e2)
+    waveGraphics.fillStyle(0x0c90e2, 0.95);
+    waveGraphics.beginPath();
+    waveGraphics.moveTo(-290, 0);
+    this.drawBezierCurve(waveGraphics, -290, 0, -200, -35, -90, -115, 0, -155);
+    this.drawBezierCurve(waveGraphics, 0, -155, 45, -155, 85, -75, 105, 0);
+    waveGraphics.lineTo(105, 0);
+    waveGraphics.lineTo(-290, 0);
+    waveGraphics.closePath();
+    waveGraphics.fill();
+
+    // Cyan active water layer (matches top background of image: 0x42e0c7)
+    waveGraphics.fillStyle(0x42e0c7, 0.98);
+    waveGraphics.beginPath();
+    waveGraphics.moveTo(-270, 0);
+    this.drawBezierCurve(waveGraphics, -270, 0, -180, -30, -80, -100, 0, -135);
+    this.drawBezierCurve(waveGraphics, 0, -135, 40, -135, 75, -65, 90, 0);
+    waveGraphics.lineTo(90, 0);
+    waveGraphics.lineTo(-270, 0);
+    waveGraphics.closePath();
+    waveGraphics.fill();
+
+    // Cartoon flowing outline curves for stylized water movement
+    waveGraphics.lineStyle(2, 0xffffff, 0.6);
+    // Outline for dark blue crest
+    waveGraphics.beginPath();
+    waveGraphics.moveTo(-320, 0);
+    this.drawBezierCurve(waveGraphics, -320, 0, -220, -45, -100, -130, 0, -175);
+    this.drawBezierCurve(waveGraphics, 0, -175, 50, -175, 95, -85, 120, 0);
+    waveGraphics.strokePath();
+
+    // Outline for medium blue layer
+    waveGraphics.lineStyle(1.5, 0xffffff, 0.45);
+    waveGraphics.beginPath();
+    waveGraphics.moveTo(-290, 0);
+    this.drawBezierCurve(waveGraphics, -290, 0, -200, -35, -90, -115, 0, -155);
+    this.drawBezierCurve(waveGraphics, 0, -155, 45, -155, 85, -75, 105, 0);
+    waveGraphics.strokePath();
+
+    // Thin flow lines inside the wave body to give movement detail
+    waveGraphics.lineStyle(1.5, 0xffffff, 0.25);
+    waveGraphics.beginPath();
+    waveGraphics.moveTo(-250, 0);
+    this.drawBezierCurve(waveGraphics, -250, 0, -180, -30, -100, -90, -20, -130);
+    waveGraphics.strokePath();
+
+    waveGraphics.beginPath();
+    waveGraphics.moveTo(-200, 0);
+    this.drawBezierCurve(waveGraphics, -200, 0, -140, -25, -80, -70, -10, -100);
+    waveGraphics.strokePath();
+
+    container.add(waveGraphics);
+
+    // 2. The Surfing SpongeBob Image (head of the wave)
+    // Positioned a bit lower at y=-170 (submerged slightly in the wave crest)
+    const bobSurf = this.add.sprite(0, -170, 'bob-surf').setOrigin(0.5, 0.95);
+    bobSurf.setDisplaySize(186, 150); // Scaled down (approx 25% smaller, aspect ratio preserved)
+    
+    // Float/bobbing effect inside the wave
+    this.tweens.add({
+      targets: bobSurf,
+      y: -176,
+      duration: 350,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+    container.add(bobSurf);
+
+    // 3. Spray, wake, shadow and droplet foam graphics around the board
+    const blendGraphics = this.add.graphics();
+    
+    // Board shadow on the wave surface (gives depth and grounds the sprite)
+    blendGraphics.fillStyle(0x011b2b, 0.6);
+    blendGraphics.fillEllipse(0, -168, 70, 12);
+
+    // Draw white foam circles around the surfboard bottom to simulate spray/wake
+    blendGraphics.fillStyle(0xffffff, 0.95);
+    
+    // Board wake (spraying backwards on the left)
+    blendGraphics.fillCircle(-60, -165, 12);
+    blendGraphics.fillCircle(-45, -167, 14);
+    blendGraphics.fillCircle(-30, -170, 16);
+    blendGraphics.fillCircle(-75, -160, 9);
+    blendGraphics.fillCircle(-90, -155, 7);
+
+    // Splashes in front of the board (on the right)
+    blendGraphics.fillCircle(40, -168, 10);
+    blendGraphics.fillCircle(55, -165, 8);
+    blendGraphics.fillCircle(70, -160, 6);
+
+    // Board bottom spray (cyan highlights)
+    blendGraphics.fillStyle(0x51decb, 0.85);
+    blendGraphics.fillCircle(-40, -160, 8);
+    blendGraphics.fillCircle(0, -158, 10);
+    blendGraphics.fillCircle(30, -160, 8);
+
+    // Droplet spray (small floating circles representing water droplets flying off the crest)
+    blendGraphics.fillStyle(0xffffff, 0.8);
+    blendGraphics.fillCircle(-15, -185, 3.5);
+    blendGraphics.fillCircle(-30, -195, 4.5);
+    blendGraphics.fillCircle(-8, -205, 3.0);
+    blendGraphics.fillCircle(8, -190, 3.5);
+    blendGraphics.fillCircle(22, -200, 4.0);
+    blendGraphics.fillCircle(38, -185, 3.0);
+    
+    // Darker cyan highlights
+    blendGraphics.fillStyle(0x0c90e2, 0.7);
+    blendGraphics.fillCircle(-60, -180, 10);
+    blendGraphics.fillCircle(60, -180, 10);
+    
+    container.add(blendGraphics);
+
+    // Enable physics on the container
+    this.physics.add.existing(container);
+    const body = container.body as Phaser.Physics.Arcade.Body;
+    body.setAllowGravity(false);
+    body.setVelocityX(600);
+
+    this.surfWave = container;
+  }
+
+  private destroySurfWave(): void {
+    if (this.surfWave) {
+      this.surfWave.destroy();
+      this.surfWave = null;
     }
   }
 }

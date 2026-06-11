@@ -40,6 +40,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
   protected isSlowed: boolean = false;
   protected slowMultiplier: number = 1.0;
   protected isFrozen: boolean = false;
+  protected isSlippery: boolean = false;
 
   protected label: Phaser.GameObjects.Text | null = null;
   protected labelOffsetY: number = 40;
@@ -148,6 +149,10 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
 
   // ── Movement handlers ─────────────────────────────────────────
 
+  setSlippery(slippery: boolean): void {
+    this.isSlippery = slippery;
+  }
+
   private handleMovement(wasd: WASDKeys): void {
     if (this.isDashing) return;
     if (this.isFrozen) {
@@ -157,16 +162,35 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body;
     const speed = this.stats.speed * this.slowMultiplier;
 
-    if (wasd.A.isDown) {
-      body.setVelocityX(-speed);
-      this.facingRight = false;
-      this.setFlipX(true);
-    } else if (wasd.D.isDown) {
-      body.setVelocityX(speed);
-      this.facingRight = true;
-      this.setFlipX(false);
+    if (this.isSlippery) {
+      const accel = 15;
+      const drag = 0.94;
+      if (wasd.A.isDown) {
+        body.setVelocityX(Math.max(-speed, body.velocity.x - accel));
+        this.facingRight = false;
+        this.setFlipX(true);
+      } else if (wasd.D.isDown) {
+        body.setVelocityX(Math.min(speed, body.velocity.x + accel));
+        this.facingRight = true;
+        this.setFlipX(false);
+      } else {
+        body.setVelocityX(body.velocity.x * drag);
+        if (Math.abs(body.velocity.x) < 5) {
+          body.setVelocityX(0);
+        }
+      }
     } else {
-      body.setVelocityX(0);
+      if (wasd.A.isDown) {
+        body.setVelocityX(-speed);
+        this.facingRight = false;
+        this.setFlipX(true);
+      } else if (wasd.D.isDown) {
+        body.setVelocityX(speed);
+        this.facingRight = true;
+        this.setFlipX(false);
+      } else {
+        body.setVelocityX(0);
+      }
     }
   }
 
@@ -267,9 +291,9 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     if (time - this.lastFireTime < this.stats.fireCooldown) return;
     this.lastFireTime = time;
 
-    // Snap para o múltiplo de 30° mais próximo do cursor — 6 ângulos por hemisfério
+    // Snap para o múltiplo de 15° mais próximo do cursor — 12 ângulos por hemisfério (mais precisão)
     const raw = Phaser.Math.Angle.Between(this.x, this.y, pointer.worldX, pointer.worldY);
-    const snapped = Math.round(raw / (Math.PI / 6)) * (Math.PI / 6);
+    const snapped = Math.round(raw / (Math.PI / 12)) * (Math.PI / 12);
 
     // Vira o personagem para o lado do cursor
     this.facingRight = Math.cos(snapped) >= 0;

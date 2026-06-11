@@ -90,7 +90,7 @@ export class DemoEndScene extends Phaser.Scene {
       .text(
         width / 2,
         height / 2 + 150,
-        '[ENTER] Rejogar do Prólogo    [1] Patrick    [2] Lula    [3] Sandy',
+        '[ENTER] Rejogar do Prólogo    [1] Patrick    [2] Lula    [3] Sandy    [4] Bob    [5] Final',
         mono(15, COLORS_CSS.gold),
       )
       .setOrigin(0.5);
@@ -116,6 +116,12 @@ export class DemoEndScene extends Phaser.Scene {
     });
     this.input.keyboard!.once('keydown-THREE', () => {
       fadeToScene(this, 'Phase3Scene');
+    });
+    this.input.keyboard!.once('keydown-FOUR', () => {
+      fadeToScene(this, 'Phase4Scene');
+    });
+    this.input.keyboard!.once('keydown-FIVE', () => {
+      fadeToScene(this, 'FinalScene');
     });
   }
 }

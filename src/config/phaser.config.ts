@@ -6,7 +6,11 @@ import { DialogScene } from '../scenes/DialogScene';
 import { Phase1Scene } from '../scenes/phases/Phase1Scene';
 import { Phase2Scene } from '../scenes/phases/Phase2Scene';
 import { Phase3Scene } from '../scenes/phases/Phase3Scene';
+import { Phase4Scene } from '../scenes/phases/Phase4Scene';
+import { FinalScene } from '../scenes/phases/FinalScene';
+import { EndingScene } from '../scenes/EndingScene';
 import { DemoEndScene } from '../scenes/DemoEndScene';
+import { SkillSelectScene } from '../scenes/SkillSelectScene';
 
 export const phaserConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -21,7 +25,7 @@ export const phaserConfig: Phaser.Types.Core.GameConfig = {
     },
   },
   // DialogScene deve vir DEPOIS das Phase scenes para renderizar por cima delas
-  scene: [BootScene, PrologoScene, Phase1Scene, Phase2Scene, Phase3Scene, DemoEndScene, DialogScene],
+  scene: [BootScene, PrologoScene, Phase1Scene, Phase2Scene, Phase3Scene, Phase4Scene, SkillSelectScene, FinalScene, EndingScene, DemoEndScene, DialogScene],
   parent: 'game-container',
   scale: {
     mode: Phaser.Scale.FIT,

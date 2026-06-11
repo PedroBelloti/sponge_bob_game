@@ -59,6 +59,14 @@ export const ATTACK_PALETTES = {
   ice:      { core: 0xffffff, mid: 0xb2ebf2, halo: 0x4dd0e1 },
   /** Âncoras da Suprema — verde espectral do Holandês. */
   suprema:  { core: 0xccff90, mid: 0x69f0ae, halo: 0x1b5e20 },
+  /** Bob boss (hambúrgueres) — âmbar de lanchonete. */
+  bobBoss:  { core: 0xfff8e1, mid: 0xffb300, halo: 0xe65100 },
+  /** Gary (gosma/rolagem) — verde-limo de lesma. */
+  gary:     { core: 0xf1f8e9, mid: 0xaed581, halo: 0x558b2f },
+  /** Homem Sereia (raio) — verde herói aposentado. */
+  mermaidMan: { core: 0xe8f5e9, mid: 0x66bb6a, halo: 0x1b5e20 },
+  /** Mexilhãozinho (bolhas) — azul-bolha guiada. */
+  barnacleBoy: { core: 0xe3f2fd, mid: 0x64b5f6, halo: 0x1565c0 },
 } as const satisfies Record<string, AttackPalette>;
 
 // ── Fontes ──────────────────────────────────────────────────────

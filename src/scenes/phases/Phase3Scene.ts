@@ -80,7 +80,7 @@ export class Phase3Scene extends BossPhaseScene {
   }
 
   protected getNextSceneKey(): string {
-    return 'DemoEndScene';
+    return 'Phase4Scene';
   }
 
   protected getBossProjectileTextureKey(): string {
