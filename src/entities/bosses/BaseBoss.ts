@@ -29,6 +29,8 @@ export interface ProjectileData {
   lifespanMs?: number;   // TTL para projéteis que não saem da tela
   gravity?: boolean;     // trajetória em arco (granadas de gelo da Sandy)
   effect?: 'freeze';     // efeito extra ao atingir o jogador
+  trailTint?: number;    // cor do rastro de partículas (default: paleta do boss)
+  rotation?: number;     // rotação visual do sprite (notas do Lula)
 }
 
 export abstract class BaseBoss extends Phaser.GameObjects.Container {
@@ -119,6 +121,20 @@ export abstract class BaseBoss extends Phaser.GameObjects.Container {
       targets: this,
       alpha: 0.3,
       duration: 60,
+      yoyo: true,
+    });
+    // Punch de escala + jitter lateral — o golpe "pesa"
+    this.scene.tweens.add({
+      targets: this,
+      scaleX: this.scaleX * 1.05,
+      scaleY: this.scaleY * 1.05,
+      duration: 40,
+      yoyo: true,
+    });
+    this.scene.tweens.add({
+      targets: this,
+      x: this.x + Phaser.Math.Between(-3, 3),
+      duration: 40,
       yoyo: true,
     });
   }

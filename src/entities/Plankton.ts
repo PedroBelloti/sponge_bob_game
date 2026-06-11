@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { CONSTANTS } from '../config/constants';
 import { EventBus } from '../core/EventBus';
 import { PlayerBase } from './PlayerBase';
+import { ATTACK_PALETTES, COLORS_CSS, caption } from '../config/theme';
 
 export class Plankton extends PlayerBase {
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -15,9 +16,12 @@ export class Plankton extends PlayerBase {
       projectileDamage: CONSTANTS.PLANKTON_LASER_DAMAGE,
       projectileSpeed:  CONSTANTS.PLANKTON_LASER_SPEED,
       fireCooldown:     CONSTANTS.PLANKTON_LASER_FIRE_INTERVAL,
-      projectileColor:  0xff6f00,
+      // Cyan = identidade do player — o laranja anterior colidia com os
+      // tiros do RoboPlankton e confundia a leitura
+      projectileColor:  ATTACK_PALETTES.plankton.mid,
       projectileWidth:  16,
       projectileHeight: 4,
+      palette:          ATTACK_PALETTES.plankton,
     });
 
     this.setDepth(2);
@@ -25,7 +29,7 @@ export class Plankton extends PlayerBase {
     this.walkAnimKey = 'plankton-walk';
 
     this.label = scene.add
-      .text(x, y - 66, 'PLANKTON', { fontSize: '12px', color: '#4CAF50' })
+      .text(x, y - 66, 'PLANKTON', caption(11, COLORS_CSS.success))
       .setOrigin(0.5)
       .setDepth(10);
   }

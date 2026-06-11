@@ -5,6 +5,16 @@ import type { BaseBoss } from '../../entities/bosses/BaseBoss';
 import type { DialogConfig } from '../DialogScene';
 import { DIALOG_SANDY } from '../../data/dialogs';
 import { BossPhaseScene } from './BossPhaseScene';
+import {
+  ATTACK_PALETTES,
+  COLORS_CSS,
+  caption,
+  display,
+  impactBurst,
+  makeGlowCapsule,
+  makeGlowTexture,
+} from '../../config/theme';
+import type { AttackPalette } from '../../config/theme';
 
 interface TestRobot {
   sprite: Phaser.Physics.Arcade.Sprite;
@@ -37,40 +47,23 @@ export class Phase3Scene extends BossPhaseScene {
   protected buildArena(width: number, height: number): void {
     this.buildTextures();
 
-    // Água profunda ao redor da cúpula
-    this.add.rectangle(width / 2, height / 2, width, height, 0x04101c);
+    this.add.image(width / 2, height / 2, 'bg-sandy');
 
-    // Bolhas distantes
-    const gfx = this.add.graphics();
-    gfx.fillStyle(0x4fc3f7, 0.08);
-    ([[180, 200, 7], [420, 120, 4], [760, 90, 6], [1010, 170, 5], [1180, 320, 8]] as
-      [number, number, number][]).forEach(([x, y, r]) => gfx.fillCircle(x, y, r));
-
-    // Vidro da cúpula
-    const dome = this.add.graphics();
-    dome.lineStyle(5, 0x4fc3f7, 0.22);
-    dome.beginPath();
-    dome.arc(width / 2, height - 20, 640, Math.PI, 0, false);
-    dome.strokePath();
-    dome.lineStyle(2, 0x4fc3f7, 0.12);
-    dome.beginPath();
-    dome.arc(width / 2, height - 20, 600, Math.PI, 0, false);
-    dome.strokePath();
-
-    this.add.text(16, 16, 'CÚPULA SUBMARINA', { fontSize: '14px', color: '#4FC3F7' });
-
-    // Plantas texanas
-    this.buildCactus(450, height - 50);
-    this.buildCactus(850, height - 50);
+    this.add
+      .text(16, 16, '◆ CÚPULA SUBMARINA', caption(12, COLORS_CSS.text))
+      .setShadow(1, 1, '#000000', 2);
 
     // Chão de terra da cúpula
     this.ground = this.physics.add.staticGroup();
-    (this.ground.create(width / 2, height - 25, 'phase3-ground') as Phaser.Physics.Arcade.Sprite).refreshBody();
+    // Invisível: o gramado da imagem faz o papel de piso
+    const ground = this.ground.create(width / 2, height - 25, 'phase3-ground') as Phaser.Physics.Arcade.Sprite;
+    ground.refreshBody();
+    ground.setVisible(false);
 
-    // Plataformas de metal
+    // Plataformas de metal — one-way, em escada alcançável (degraus ≤125px)
     this.platforms = this.physics.add.staticGroup();
-    [[300, 500], [640, 395], [950, 490]].forEach(([x, y]) => {
-      (this.platforms.create(x, y, 'phase3-platform') as Phaser.Physics.Arcade.Sprite).refreshBody();
+    [[300, 555], [640, 450], [950, 555]].forEach(([x, y]) => {
+      this.addOneWayPlatform(x, y, 'phase3-platform');
     });
 
     this.buildPanel();
@@ -95,7 +88,16 @@ export class Phase3Scene extends BossPhaseScene {
   }
 
   protected getBossBarColor(): number {
-    return 0xffcc80;
+    // Vermelho dos lasers — o pêssego anterior não conversava com os ataques
+    return ATTACK_PALETTES.sandy.mid;
+  }
+
+  protected getBossPalette(): AttackPalette {
+    return ATTACK_PALETTES.sandy;
+  }
+
+  protected getBossName(): string {
+    return 'SANDY BOCHECHAS';
   }
 
   // GDD: A = respeitosa (telegrafada, generosa), B = competitiva (rápida e perigosa)
@@ -121,11 +123,11 @@ export class Phase3Scene extends BossPhaseScene {
   protected onBossFinalPhaseHook(): void {
     const { width, height } = this.scale;
     const msg = this.add
-      .text(width / 2, height / 2, 'Sandy ativou o protocolo de emergência!', {
-        fontSize: '24px', color: '#FFCC80',
-      })
+      .text(width / 2, height / 2, 'Sandy ativou o protocolo de emergência!', display(24, '#ff5252'))
       .setOrigin(0.5)
-      .setDepth(20);
+      .setDepth(20)
+      .setScale(0.6);
+    this.tweens.add({ targets: msg, scale: 1, duration: 250, ease: 'Back.easeOut' });
     this.tweens.add({ targets: msg, alpha: 0, duration: 2000, onComplete: () => msg.destroy() });
   }
 
@@ -205,10 +207,17 @@ export class Phase3Scene extends BossPhaseScene {
     this.panelBody.setFillStyle(0x212121);
     this.cameras.main.shake(150, 0.006);
 
-    const blast = this.add.ellipse(this.panelX, this.panelY, 90, 90, 0xffab40, 0.7).setDepth(6);
+    const blast = this.add
+      .ellipse(this.panelX, this.panelY, 90, 90, 0xffab40, 0.7)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(6);
     this.tweens.add({
       targets: blast, alpha: 0, scaleX: 1.8, scaleY: 1.8, duration: 350,
       onComplete: () => blast.destroy(),
+    });
+    impactBurst(this, this.panelX, this.panelY, { core: 0xffffff, mid: 0xffab40, halo: 0xe65100 }, {
+      particles: 14,
+      scale: 1.4,
     });
 
     this.sandy.forceFinalPhase();
@@ -284,18 +293,10 @@ export class Phase3Scene extends BossPhaseScene {
       targets: poof, alpha: 0, scaleX: 1.5, scaleY: 1.5, duration: 280,
       onComplete: () => poof.destroy(),
     });
-  }
-
-  // ── Plantas texanas ───────────────────────────────────────────
-
-  private buildCactus(x: number, groundTop: number): void {
-    const g = this.add.graphics();
-    g.fillStyle(0x66bb6a, 1);
-    g.fillRoundedRect(x - 9, groundTop - 70, 18, 70, 8);
-    g.fillRoundedRect(x - 32, groundTop - 52, 26, 12, 6);
-    g.fillRoundedRect(x - 32, groundTop - 52, 12, 28, 6);
-    g.fillRoundedRect(x + 6, groundTop - 40, 26, 12, 6);
-    g.fillRoundedRect(x + 20, groundTop - 62, 12, 34, 6);
+    impactBurst(this, x, y, { core: 0xffffff, mid: 0x90a4ae, halo: 0x37474f }, {
+      particles: 6,
+      scale: 0.8,
+    });
   }
 
   // ── Texturas próprias da arena ────────────────────────────────
@@ -312,38 +313,46 @@ export class Phase3Scene extends BossPhaseScene {
 
     makeRect('phase3-ground', 0x8d7355, CONSTANTS.GAME_WIDTH, 50);
 
+    // Placa de laboratório: metal escovado, faixas de alerta nas pontas,
+    // linha de neon cyan no topo e rebites — tech da cúpula da Sandy
     if (!this.textures.exists('phase3-platform')) {
+      const w = 230;
+      const h = 26;
       const g = this.add.graphics();
+
+      // Placa principal com sombra inferior
       g.fillStyle(0x78909c, 1);
-      g.fillRect(0, 0, 200, 20);
+      g.fillRoundedRect(0, 3, w, h - 3, 5);
       g.fillStyle(0x546e7a, 1);
-      g.fillRect(0, 0, 200, 4);
-      [20, 70, 120, 170].forEach((x) => g.fillCircle(x + 5, 12, 2.5)); // rebites
-      g.generateTexture('phase3-platform', 200, 20);
+      g.fillRoundedRect(0, h - 7, w, 7, { tl: 0, tr: 0, bl: 5, br: 5 });
+
+      // Faixas de alerta diagonais nas pontas
+      g.fillStyle(0xffd400, 1);
+      g.fillRect(4, 6, 30, 14);
+      g.fillRect(w - 34, 6, 30, 14);
+      g.fillStyle(0x263238, 1);
+      [0, 1, 2].forEach((i) => {
+        g.fillRect(8 + i * 10, 6, 5, 14);
+        g.fillRect(w - 30 + i * 10, 6, 5, 14);
+      });
+
+      // Linha de neon no topo — superfície pisável bem legível
+      g.fillStyle(0x4dd0e1, 0.95);
+      g.fillRoundedRect(0, 0, w, 4, { tl: 5, tr: 5, bl: 0, br: 0 });
+
+      // Rebites
+      g.fillStyle(0x37474f, 1);
+      [50, 90, 140, 180].forEach((x) => g.fillCircle(x, 14, 2.5));
+
+      g.generateTexture('phase3-platform', w, h);
       g.destroy();
     }
 
-    // Laser de laboratório: feixe vermelho com núcleo claro
-    if (!this.textures.exists('sandy-laser')) {
-      const g = this.add.graphics();
-      g.fillStyle(0xff5252, 1);
-      g.fillRect(0, 0, 46, 8);
-      g.fillStyle(0xffcdd2, 1);
-      g.fillRect(0, 3, 46, 2);
-      g.generateTexture('sandy-laser', 46, 8);
-      g.destroy();
-    }
+    // Laser de laboratório: cápsula com glow assado (core branco / halo rubro)
+    makeGlowCapsule(this, 'sandy-laser', ATTACK_PALETTES.sandy, 46, 12);
 
-    // Granada de gelo
-    if (!this.textures.exists('ice-grenade')) {
-      const g = this.add.graphics();
-      g.fillStyle(0x81d4fa, 1);
-      g.fillCircle(9, 9, 9);
-      g.fillStyle(0xe1f5fe, 1);
-      g.fillCircle(6, 6, 3);
-      g.generateTexture('ice-grenade', 18, 18);
-      g.destroy();
-    }
+    // Granada de gelo: glow branco-gélido
+    makeGlowTexture(this, 'ice-grenade', ATTACK_PALETTES.ice, 11);
 
     // Robô de teste: caixa com olho e esteiras
     if (!this.textures.exists('sandy-robot')) {
@@ -352,8 +361,13 @@ export class Phase3Scene extends BossPhaseScene {
       g.fillRoundedRect(0, 0, 36, 24, 5);
       g.fillStyle(0x37474f, 1);
       g.fillRect(0, 24, 36, 8);
+      // Olho com brilho de alerta
+      g.fillStyle(0xff1744, 0.4);
+      g.fillCircle(26, 10, 7);
       g.fillStyle(0xff1744, 1);
       g.fillCircle(26, 10, 5);
+      g.fillStyle(0xffffff, 0.9);
+      g.fillCircle(27, 9, 2);
       g.generateTexture('sandy-robot', 36, 32);
       g.destroy();
     }

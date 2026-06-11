@@ -1,18 +1,50 @@
 import * as Phaser from 'phaser';
+import {
+  COLORS,
+  COLORS_CSS,
+  caption,
+  display,
+  ensureFonts,
+  fadeToScene,
+  makeParticleDot,
+  mono,
+} from '../config/theme';
+
+const BAR_W = 460;
+const BAR_H = 14;
+const MIN_DISPLAY_MS = 1200;
 
 export class BootScene extends Phaser.Scene {
+  private fontsReady!: Promise<void>;
+  private barFill!: Phaser.GameObjects.Rectangle;
+  private percentText!: Phaser.GameObjects.Text;
+  private fileText!: Phaser.GameObjects.Text;
+  private startedAt = 0;
+  private transitioning = false;
+
   constructor() {
     super({ key: 'BootScene' });
   }
 
   preload(): void {
-    const { width, height } = this.scale;
-    this.add
-      .text(width / 2, height / 2, 'Carregando...', {
-        fontSize: '20px',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
+    this.startedAt = this.time.now;
+    this.fontsReady = ensureFonts();
+    this.buildLoadingScreen();
+
+    // Barra reflete o progresso real do loader — tween, não set, para
+    // continuar fluida mesmo com poucos arquivos pequenos
+    this.load.on(Phaser.Loader.Events.PROGRESS, (value: number) => {
+      this.tweens.add({
+        targets: this.barFill,
+        displayWidth: BAR_W * value,
+        duration: 200,
+        ease: 'Cubic.easeOut',
+      });
+      this.percentText.setText(`${Math.round(value * 100)}%`);
+    });
+    this.load.on(Phaser.Loader.Events.FILE_PROGRESS, (file: Phaser.Loader.File) => {
+      this.fileText.setText(`▸ ${file.key}`);
+    });
 
     // ── Sprites reais ─────────────────────────────────────────────
     // Cada frame é uma imagem separada (recorte exato do personagem) — fatiar
@@ -29,6 +61,80 @@ export class BootScene extends Phaser.Scene {
     this.load.image('bob-walk-1', 'assets/bob-walk-1.png');
     this.load.image('bob-walk-2', 'assets/bob-walk-2.png');
     this.load.image('roboplankton', 'assets/roboplankton.png');
+
+    // ── Cenários reais (1280x720, recortados de docs/cenario_*.jpeg) ──
+    // O do Bob ainda não existe — a fase dele não foi construída.
+    this.load.image('bg-prologo', 'assets/bg-prologo.jpg');
+    this.load.image('bg-patrick', 'assets/bg-patrick.jpg');
+    this.load.image('bg-lula',    'assets/bg-lula.jpg');
+    this.load.image('bg-sandy',   'assets/bg-sandy.jpg');
+  }
+
+  // ── Tela de carregamento — estética "diário de mergulho" do menu ──
+
+  private buildLoadingScreen(): void {
+    const { width, height } = this.scale;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    this.add.rectangle(cx, cy, width, height, COLORS.bg);
+
+    // Bolhas subindo — mesma ambientação do menu
+    const dot = makeParticleDot(this);
+    this.add.particles(0, 0, dot, {
+      x: { min: 0, max: width },
+      y: height + 12,
+      lifespan: 5000,
+      speedY: { min: -90, max: -40 },
+      speedX: { min: -8, max: 8 },
+      scale: { start: 0.4, end: 1.1 },
+      alpha: { start: 0.3, end: 0 },
+      tint: COLORS.cyan,
+      frequency: 160,
+    });
+
+    const title = this.add
+      .text(cx, cy - 90, 'FENDA DO BIQUINI', display(44))
+      .setOrigin(0.5);
+    this.tweens.add({
+      targets: title,
+      alpha: 0.85,
+      scale: 1.02,
+      duration: 2000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    const sub = this.add
+      .text(cx, cy - 40, '◆ SISTEMA DE MERGULHO — CARREGANDO RECURSOS', caption(11))
+      .setOrigin(0.5);
+
+    // Track arredondado da barra de progresso
+    const track = this.add.graphics();
+    track.fillStyle(COLORS.panelDark, 1);
+    track.fillRoundedRect(cx - BAR_W / 2, cy + 10, BAR_W, BAR_H, BAR_H / 2);
+    track.lineStyle(1, COLORS.cyan, 0.3);
+    track.strokeRoundedRect(cx - BAR_W / 2, cy + 10, BAR_W, BAR_H, BAR_H / 2);
+
+    this.barFill = this.add
+      .rectangle(cx - BAR_W / 2 + 2, cy + 10 + BAR_H / 2, 0, BAR_H - 4, COLORS.gold)
+      .setOrigin(0, 0.5);
+
+    this.percentText = this.add
+      .text(cx + BAR_W / 2, cy + 38, '0%', mono(12, COLORS_CSS.gold))
+      .setOrigin(1, 0);
+    this.fileText = this.add
+      .text(cx - BAR_W / 2, cy + 38, '▸ iniciando…', mono(10, COLORS_CSS.textDim))
+      .setOrigin(0, 0);
+
+    // As fontes podem resolver no meio do loading — re-renderiza os textos
+    // já criados para trocar o fallback pela fonte real
+    const texts = [title, sub, this.percentText, this.fileText];
+    this.fontsReady.then(() => {
+      if (!this.scene.isActive('BootScene')) return;
+      texts.forEach((t) => t.active && t.updateText());
+    });
   }
 
   create(): void {
@@ -65,8 +171,38 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    this.time.delayedCall(800, () => {
-      this.scene.start('PrologoScene');
+    // Sai quando: assets ok (já estamos no create) + fontes prontas +
+    // tempo mínimo de exibição (sem flash de tela)
+    const elapsed = this.time.now - this.startedAt;
+    const minWait = new Promise<void>((resolve) =>
+      this.time.delayedCall(Math.max(0, MIN_DISPLAY_MS - elapsed), () => resolve()),
+    );
+
+    Promise.all([this.fontsReady, minWait]).then(() => this.finish());
+  }
+
+  private finish(): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+
+    this.percentText.setText('100%');
+    this.fileText.setText('▸ pronto');
+    this.tweens.add({
+      targets: this.barFill,
+      displayWidth: BAR_W - 4,
+      duration: 180,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        // Flash gold na barra e mergulho para o prólogo
+        this.tweens.add({
+          targets: this.barFill,
+          alpha: 0.4,
+          duration: 90,
+          yoyo: true,
+          repeat: 1,
+          onComplete: () => fadeToScene(this, 'PrologoScene', undefined, 450),
+        });
+      },
     });
   }
 }

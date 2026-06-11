@@ -18,6 +18,10 @@
 | **Protagonista** | Plankton |
 | **Versão** | GDD v1.0 |
 
+> **Padrões de UI/UX e identidade visual:** ver `docs/guia_visual.md` — paletas de
+> ataque por personagem, juice de combate, plataformas acessíveis, HUD, diálogo e
+> transições. Obrigatório para a implementação de toda fase deste GDD.
+
 ---
 
 ## A HISTÓRIA

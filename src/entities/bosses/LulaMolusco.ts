@@ -37,7 +37,7 @@ export class LulaMolusco extends BaseBoss {
       finalPhaseSpeedMultiplier: 1.2,
       finalPhaseDamageMultiplier: 1.0,
       projectilePoolSize: 30,
-      projectileColor: 0xb39ddb,
+      projectileColor: 0xb388ff, // violeta elétrico da paleta lula do tema
       projectileWidth: 14,
       projectileHeight: 14,
       projectileSpeed: CONSTANTS.LULA_NOTE_SPEED,
@@ -113,7 +113,12 @@ export class LulaMolusco extends BaseBoss {
     this.add(g);
 
     const label = this.scene.add
-      .text(0, -88, 'LULA MOLUSCO', { fontSize: '13px', color: '#B2DFDB', fontStyle: 'bold' })
+      .text(0, -88, 'LULA MOLUSCO', {
+        fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+        fontSize: '12px',
+        color: '#B2DFDB',
+        fontStyle: 'bold',
+      })
       .setOrigin(0.5);
     this.add(label);
   }
@@ -166,6 +171,8 @@ export class LulaMolusco extends BaseBoss {
       // GDD fase final: notas passam a quicar nas paredes
       bounce: this.isFinalPhase,
       lifespanMs: this.isFinalPhase ? 3500 : undefined,
+      // Cada nota nasce com uma inclinação própria — a linha parece "tocada"
+      rotation: Phaser.Math.FloatBetween(-0.4, 0.4),
     }));
   }
 

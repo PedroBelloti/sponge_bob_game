@@ -20,7 +20,7 @@ export class RoboPlankton extends BaseBoss {
       finalPhaseSpeedMultiplier: 1.0,
       finalPhaseDamageMultiplier: 1.0,
       projectilePoolSize: 30,
-      projectileColor: 0xff6f00,
+      projectileColor: 0xff9a1f, // laranja vilão-tech (paleta robo do tema)
       projectileWidth: 20,
       projectileHeight: 20,
       projectileSpeed: CONSTANTS.PROLOGO_ROBO_PROJECTILE_SPEED,
@@ -87,9 +87,27 @@ export class RoboPlankton extends BaseBoss {
     const tx = targetX ?? eyeX - 1;
     const ty = targetY ?? eyeY;
 
+    this.flashEye(eyeX, eyeY);
+
     return this.isFinalPhase
       ? this.buildSpread(eyeX, eyeY, tx, ty)
       : this.buildSingle(eyeX, eyeY, tx, ty);
+  }
+
+  // Clarão no olho ao disparar — telegraph instantâneo do tiro
+  private flashEye(x: number, y: number): void {
+    const flash = this.scene.add
+      .ellipse(x, y, 46, 46, 0xff9a1f, 0.8)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(3);
+    this.scene.tweens.add({
+      targets: flash,
+      scale: 1.6,
+      alpha: 0,
+      duration: 140,
+      ease: 'Quad.easeOut',
+      onComplete: () => flash.destroy(),
+    });
   }
 
   m2(_time: number): ProjectileData[] {

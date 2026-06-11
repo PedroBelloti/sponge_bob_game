@@ -140,7 +140,12 @@ export class SandyBochechas extends BaseBoss {
     this.add(g);
 
     const label = this.scene.add
-      .text(0, -100, 'SANDY', { fontSize: '14px', color: '#FFE0B2', fontStyle: 'bold' })
+      .text(0, -100, 'SANDY', {
+        fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+        fontSize: '13px',
+        color: '#FFE0B2',
+        fontStyle: 'bold',
+      })
       .setOrigin(0.5);
     this.add(label);
   }
@@ -184,17 +189,52 @@ export class SandyBochechas extends BaseBoss {
   }
 
   private chargeLaser(laserY: number, charge: number): void {
-    // Linha de aviso atravessando a arena — carregamento visível (GDD)
-    const warn = this.scene.add
-      .rectangle(CONSTANTS.GAME_WIDTH / 2, laserY, CONSTANTS.GAME_WIDTH, 3, 0xff8a80, 0.3)
+    // Linha de aviso tracejada atravessando a arena — carregamento visível
+    // (GDD). Tracejado + pulso de alpha lê melhor sobre o cenário foto.
+    const warn = this.scene.add.graphics().setDepth(4).setAlpha(0.2);
+    warn.lineStyle(3, 0xff1744, 1);
+    const DASH = 18;
+    const GAP_PX = 12;
+    for (let x = 0; x < CONSTANTS.GAME_WIDTH; x += DASH + GAP_PX) {
+      warn.lineBetween(x, laserY, Math.min(x + DASH, CONSTANTS.GAME_WIDTH), laserY);
+    }
+    // Marcador na borda de origem: o tiro nasce na Sandy e viaja para a esquerda
+    const marker = this.scene.add
+      .text(this.x - 52, laserY, '◀', {
+        fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+        fontSize: '14px',
+        color: '#ff1744',
+      })
+      .setOrigin(0.5)
       .setDepth(4);
     this.scene.tweens.add({
-      targets: warn, alpha: 0.65, duration: charge / 4, yoyo: true, repeat: 1,
+      targets: [warn, marker],
+      alpha: 0.6,
+      duration: charge / 4,
+      yoyo: true,
+      repeat: 1,
     });
 
     this.scene.time.delayedCall(charge, () => {
       warn.destroy();
+      marker.destroy();
       if (this.isDefeated) return;
+
+      // Clarão localizado no cano — flash de tela inteira piscava demais
+      // com 4 lasers em sequência
+      const muzzle = this.scene.add
+        .ellipse(this.x - 60, laserY, 36, 20, 0xff5252, 0.85)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(5);
+      this.scene.tweens.add({
+        targets: muzzle,
+        scaleX: 1.8,
+        scaleY: 1.4,
+        alpha: 0,
+        duration: 130,
+        ease: 'Quad.easeOut',
+        onComplete: () => muzzle.destroy(),
+      });
 
       this.queuedShots.push({
         x: this.x - 60,
@@ -231,6 +271,7 @@ export class SandyBochechas extends BaseBoss {
       gravity: true,
       effect: 'freeze' as const,
       lifespanMs: 2600,
+      trailTint: 0xb2ebf2, // rastro de neve, não o vermelho dos lasers
     }));
   }
 

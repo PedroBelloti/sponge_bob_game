@@ -5,6 +5,8 @@ import type { BaseBoss } from '../../entities/bosses/BaseBoss';
 import type { DialogConfig } from '../DialogScene';
 import { DIALOG_PATRICK } from '../../data/dialogs';
 import { BossPhaseScene } from './BossPhaseScene';
+import { ATTACK_PALETTES, COLORS_CSS, caption, display, makeGlowTexture } from '../../config/theme';
+import type { AttackPalette } from '../../config/theme';
 
 export class Phase1Scene extends BossPhaseScene {
   private patrick!: Patrick;
@@ -23,25 +25,28 @@ export class Phase1Scene extends BossPhaseScene {
   protected buildArena(width: number, height: number): void {
     this.buildTextures();
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x1c0a00);
+    this.add.image(width / 2, height / 2, 'bg-patrick');
 
-    const light = this.add.rectangle(width / 2, height / 2, 200, height, 0xffd700).setAlpha(0.06);
-    this.tweens.add({ targets: light, alpha: 0.08, duration: 3000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-
-    this.add.text(16, 16, 'DEBAIXO DA PEDRA', { fontSize: '14px', color: '#8D6E63' });
+    this.add
+      .text(16, 16, '◆ CASA DO PATRICK', caption(12, COLORS_CSS.text))
+      .setShadow(1, 1, '#000000', 2);
 
     this.ground = this.physics.add.staticGroup();
-    (this.ground.create(width / 2, height - 25, 'phase1-ground') as Phaser.Physics.Arcade.Sprite).refreshBody();
+    // Invisível: o gramado da imagem faz o papel de piso
+    const ground = this.ground.create(width / 2, height - 25, 'phase1-ground') as Phaser.Physics.Arcade.Sprite;
+    ground.refreshBody();
+    ground.setVisible(false);
 
+    // Escada acessível: chão (670) → laterais (topo ~543) → central (~433).
+    // Degraus de ~110-127px, dentro do pulo de 144px do Plankton, e one-way
+    // para subir atravessando por baixo.
     this.platforms = this.physics.add.staticGroup();
     const defs: [number, number, string][] = [
-      [200, 500, 'phase1-platform-sm'],
-      [640, 380, 'phase1-platform'],
-      [1050, 460, 'phase1-platform-sm'],
+      [220, 555, 'phase1-platform-sm'],
+      [640, 445, 'phase1-platform'],
+      [1050, 555, 'phase1-platform-sm'],
     ];
-    defs.forEach(([x, y, key]) => {
-      (this.platforms.create(x, y, key) as Phaser.Physics.Arcade.Sprite).refreshBody();
-    });
+    defs.forEach(([x, y, key]) => this.addOneWayPlatform(x, y, key));
   }
 
   protected createBoss(_width: number, height: number): BaseBoss {
@@ -63,7 +68,15 @@ export class Phase1Scene extends BossPhaseScene {
   }
 
   protected getBossBarColor(): number {
-    return 0xff8a65;
+    return ATTACK_PALETTES.patrick.mid;
+  }
+
+  protected getBossPalette(): AttackPalette {
+    return ATTACK_PALETTES.patrick;
+  }
+
+  protected getBossName(): string {
+    return 'PATRICK ESTRELA';
   }
 
   // GDD: A = desorientado (lento e imprevisível), B = animado (rápido e legível)
@@ -89,9 +102,11 @@ export class Phase1Scene extends BossPhaseScene {
 
     const { width, height } = this.scale;
     const msg = this.add
-      .text(width / 2, height / 2, 'Patrick ficou irritado!', { fontSize: '24px', color: '#FF8A65' })
+      .text(width / 2, height / 2, 'Patrick ficou irritado!', display(24, '#ff8a65'))
       .setOrigin(0.5)
-      .setDepth(20);
+      .setDepth(20)
+      .setScale(0.6);
+    this.tweens.add({ targets: msg, scale: 1, duration: 250, ease: 'Back.easeOut' });
     this.tweens.add({ targets: msg, alpha: 0, duration: 2000, onComplete: () => msg.destroy() });
   }
 
@@ -107,17 +122,12 @@ export class Phase1Scene extends BossPhaseScene {
       g.destroy();
     };
 
-    if (!this.textures.exists('patrick-stone')) {
-      const g = this.add.graphics();
-      g.fillStyle(0xffb74d, 1);
-      g.fillCircle(12, 12, 12);
-      g.generateTexture('patrick-stone', 24, 24);
-      g.destroy();
-    }
+    // Pedra do Patrick — coral de estrela-do-mar com glow assado
+    makeGlowTexture(this, 'patrick-stone', ATTACK_PALETTES.patrick, 15);
 
     makeRect('phase1-ground', 0x3e2723, CONSTANTS.GAME_WIDTH, 50);
-    makeRect('phase1-platform', 0x4e342e, 220, 20);
-    makeRect('phase1-platform-sm', 0x4e342e, 200, 20);
+    this.makeCoralPlatform('phase1-platform', 250);
+    this.makeCoralPlatform('phase1-platform-sm', 220);
 
     if (!this.textures.exists('cotton')) {
       const g = this.add.graphics();
@@ -129,6 +139,37 @@ export class Phase1Scene extends BossPhaseScene {
       g.generateTexture('cotton', 36, 36);
       g.destroy();
     }
+  }
+
+  /**
+   * Plataforma de rocha de coral — jardim do Patrick: corpo rosado e
+   * arredondado, poros escuros e topo de areia clara para marcar onde pisar.
+   */
+  private makeCoralPlatform(key: string, w: number): void {
+    if (this.textures.exists(key)) return;
+    const h = 26;
+    const g = this.add.graphics();
+
+    // Corpo de coral arredondado com sombra inferior
+    g.fillStyle(0xc75b4a, 1);
+    g.fillRoundedRect(0, 4, w, h - 4, { tl: 12, tr: 12, bl: 8, br: 8 });
+    g.fillStyle(0x9c4233, 1);
+    g.fillRoundedRect(0, h - 8, w, 8, { tl: 0, tr: 0, bl: 8, br: 8 });
+
+    // Topo de areia clara — superfície pisável bem legível
+    g.fillStyle(0xffe0b2, 1);
+    g.fillRoundedRect(0, 0, w, 8, { tl: 12, tr: 12, bl: 0, br: 0 });
+    g.fillStyle(0xffcc80, 1);
+    [0.18, 0.45, 0.72].forEach((fx) => g.fillCircle(w * fx, 4, 2));
+
+    // Poros do coral
+    g.fillStyle(0x7e342a, 0.8);
+    [0.12, 0.3, 0.52, 0.68, 0.88].forEach((fx, i) =>
+      g.fillCircle(w * fx, 14 + (i % 2) * 6, 2.5),
+    );
+
+    g.generateTexture(key, w, h);
+    g.destroy();
   }
 
   // ── Tufos de algodão ──────────────────────────────────────────

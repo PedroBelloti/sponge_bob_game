@@ -8,6 +8,21 @@ import type { BaseBoss, ProjectileData } from '../../entities/bosses/BaseBoss';
 import type { DialogConfig } from '../DialogScene';
 import { GameState } from '../../state/GameState';
 import { SkillCharge } from '../../systems/SkillCharge';
+import {
+  ATTACK_PALETTES,
+  COLORS,
+  COLORS_CSS,
+  caption,
+  display,
+  fadeInScene,
+  fadeToScene,
+  impactBurst,
+  makeGlowTexture,
+  makeParticleDot,
+  mono,
+  tweenBarTo,
+} from '../../config/theme';
+import type { AttackPalette } from '../../config/theme';
 
 /**
  * Esqueleto comum de toda luta de boss: Plankton + controles, HUD,
@@ -29,11 +44,19 @@ export abstract class BossPhaseScene extends Phaser.Scene {
 
   private bossProjectilePool!: Phaser.Physics.Arcade.Group;
   private bossHpFill!: Phaser.GameObjects.Rectangle;
+  private bossHpChip!: Phaser.GameObjects.Rectangle;
 
-  private planktonHearts: Phaser.GameObjects.Arc[] = [];
+  private planktonHearts: Phaser.GameObjects.Image[] = [];
   private planktonHpLast: number = CONSTANTS.PLANKTON_MAX_HP;
+  private lowHpPulse: Phaser.Tweens.Tween | null = null;
   private skillBarFill!: Phaser.GameObjects.Rectangle;
+  private skillLabel!: Phaser.GameObjects.Text;
   private skillReadyPulse: Phaser.Tweens.Tween | null = null;
+  private skillWasReady = false;
+
+  // Trail compartilhado por cor (frequency -1, emitParticleAt no cull loop) —
+  // zero emitters por projétil, performance segura para pools
+  private trailEmitters = new Map<number, Phaser.GameObjects.Particles.ParticleEmitter>();
 
   // ── Contrato da subclasse ─────────────────────────────────────
 
@@ -44,6 +67,10 @@ export abstract class BossPhaseScene extends Phaser.Scene {
   protected abstract getNextSceneKey(): string;
   protected abstract getBossProjectileTextureKey(): string;
   protected abstract getBossBarColor(): number;
+  /** Paleta de glow dos ataques do boss (trails, impactos, aura final). */
+  protected abstract getBossPalette(): AttackPalette;
+  /** Nome exibido sobre a barra de HP. */
+  protected abstract getBossName(): string;
 
   /** Aplica o efeito da escolha de diálogo no boss (GDD). */
   protected applyMood(_optionKey: 'A' | 'B'): void {}
@@ -61,12 +88,17 @@ export abstract class BossPhaseScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
+    fadeInScene(this);
+
     // Estado precisa resetar a cada (re)início da cena
     this.isGameOver = false;
     this.planktonHearts = [];
     this.planktonHpLast = CONSTANTS.PLANKTON_MAX_HP;
     this.skillCharge = new SkillCharge();
     this.skillReadyPulse = null;
+    this.skillWasReady = false;
+    this.lowHpPulse = null;
+    this.trailEmitters = new Map();
 
     this.buildCommonTextures();
     this.buildArena(width, height);
@@ -147,6 +179,21 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     this.applyMood(choice.optionKey as 'A' | 'B');
   }
 
+  // ── Plataformas ───────────────────────────────────────────────
+
+  /**
+   * Plataforma one-way: o jogador atravessa por baixo/pelos lados e pousa
+   * por cima — sem "bater a cabeça" ao pular por baixo dela.
+   */
+  protected addOneWayPlatform(x: number, y: number, textureKey: string): void {
+    const sprite = this.platforms.create(x, y, textureKey) as Phaser.Physics.Arcade.Sprite;
+    sprite.refreshBody();
+    const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
+    body.checkCollision.down = false;
+    body.checkCollision.left = false;
+    body.checkCollision.right = false;
+  }
+
   // ── Texturas comuns ───────────────────────────────────────────
 
   private buildCommonTextures(): void {
@@ -205,8 +252,11 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     if (!p) return;
     p.setTexture(key); // pool reaproveita sprites — textura pode estar errada
     p.setActive(true).setVisible(true);
+    p.setBlendMode(Phaser.BlendModes.ADD); // texturas têm glow assado
+    p.setRotation(data.rotation ?? 0);     // pool reusa sprites — sempre resetar
     p.setData('damage', data.damage);
     p.setData('effect', data.effect ?? null);
+    p.setData('trailTint', data.trailTint ?? this.getBossPalette().mid);
     const body = p.body as Phaser.Physics.Arcade.Body;
     body.reset(data.x, data.y);
     body.setAllowGravity(data.gravity ?? false);
@@ -240,8 +290,31 @@ export abstract class BossPhaseScene extends Phaser.Scene {
       }
       if (p.x < -20 || p.x > width + 20 || p.y < -20 || p.y > height + 20) {
         this.deactivateBossProjectile(p);
+        return;
       }
+      // Rastro luminoso — o loop já visita todo projétil ativo por frame
+      const tint = p.getData('trailTint') as number | undefined;
+      if (tint) this.getTrailEmitter(tint).emitParticleAt(p.x, p.y);
     });
+  }
+
+  /** Emitter de rastro por cor — criado sob demanda, compartilhado pelo pool. */
+  protected getTrailEmitter(tint: number): Phaser.GameObjects.Particles.ParticleEmitter {
+    let e = this.trailEmitters.get(tint);
+    if (!e) {
+      e = this.add
+        .particles(0, 0, makeParticleDot(this), {
+          lifespan: 220,
+          scale: { start: 0.55, end: 0 },
+          alpha: { start: 0.5, end: 0 },
+          blendMode: Phaser.BlendModes.ADD,
+          tint,
+          frequency: -1,
+        })
+        .setDepth(3);
+      this.trailEmitters.set(tint, e);
+    }
+    return e;
   }
 
   // ── Overlaps ──────────────────────────────────────────────────
@@ -255,6 +328,8 @@ export abstract class BossPhaseScene extends Phaser.Scene {
         const proj = _proj as Phaser.Physics.Arcade.Sprite;
         const damage = proj.getData('damage') as number ?? 1;
         const effect = proj.getData('effect') as 'freeze' | null;
+        const burstPalette = effect === 'freeze' ? ATTACK_PALETTES.ice : this.getBossPalette();
+        impactBurst(this, proj.x, proj.y, burstPalette);
         this.deactivateBossProjectile(proj);
         if (this.plankton.receiveDamage(damage)) {
           // Efeito só pega se o golpe conectou (dash/invencibilidade esquivam)
@@ -277,6 +352,7 @@ export abstract class BossPhaseScene extends Phaser.Scene {
       const laser = obj as Phaser.Physics.Arcade.Sprite;
       if (!laser.active) return;
       if (Phaser.Geom.Intersects.RectangleToRectangle(laser.getBounds(), bossRect)) {
+        impactBurst(this, laser.x, laser.y, ATTACK_PALETTES.plankton);
         laser.setActive(false).setVisible(false);
         (laser.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
         this.boss.receiveDamage(CONSTANTS.PLANKTON_LASER_DAMAGE);
@@ -287,43 +363,82 @@ export abstract class BossPhaseScene extends Phaser.Scene {
 
   // ── HUD ───────────────────────────────────────────────────────
 
+  private static readonly BOSS_BAR_W = 420;
+  private static readonly BOSS_BAR_H = 16;
+  private static readonly SKILL_BAR_W = 220;
+  private static readonly SKILL_BAR_H = 14;
+
   private buildBossHpBar(width: number): void {
-    const barW = 300;
+    const barW = BossPhaseScene.BOSS_BAR_W;
+    const barH = BossPhaseScene.BOSS_BAR_H;
     const cx = width / 2;
     const y = 40;
-    this.add.rectangle(cx, y, barW, 20, 0x333333).setDepth(5);
-    this.bossHpFill = this.add.rectangle(cx, y, barW, 20, this.getBossBarColor()).setDepth(6);
+    const left = cx - barW / 2;
+
+    this.add
+      .text(cx, y - 14, this.getBossName(), display(13, COLORS_CSS.text))
+      .setOrigin(0.5, 1)
+      .setDepth(5);
+
+    const track = this.add.graphics().setDepth(5);
+    track.fillStyle(COLORS.panelDark, 0.85);
+    track.fillRoundedRect(left, y - barH / 2, barW, barH, barH / 2);
+    track.lineStyle(1, COLORS.cyan, 0.3);
+    track.strokeRoundedRect(left, y - barH / 2, barW, barH, barH / 2);
+
+    // Chip branco por baixo do fill: marca o dano e "escorre" com atraso
+    this.bossHpChip = this.add
+      .rectangle(left + 2, y, barW - 4, barH - 6, 0xffffff, 0.55)
+      .setOrigin(0, 0.5)
+      .setDepth(6);
+    this.bossHpFill = this.add
+      .rectangle(left + 2, y, barW - 4, barH - 6, this.getBossBarColor())
+      .setOrigin(0, 0.5)
+      .setDepth(7);
   }
 
   private buildHUD(width: number): void {
+    // Pips de vida do Plankton — glow assado, leitura clara contra cenários
+    makeGlowTexture(this, 'hud-hp-pip', { core: 0xffffff, mid: COLORS.success, halo: 0x1b5e20 }, 11);
     const startX = width - 20;
     for (let i = 0; i < CONSTANTS.PLANKTON_MAX_HP; i++) {
-      const heart = this.add.arc(startX - 14 - i * 30, 60, 12, 0, 360, false, 0x4caf50).setDepth(10);
-      this.planktonHearts.push(heart);
+      const pip = this.add
+        .image(startX - 14 - i * 30, 60, 'hud-hp-pip')
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(10);
+      this.planktonHearts.push(pip);
     }
-    this.add.text(width - 20, 80, 'PLANKTON', { fontSize: '12px', color: '#4CAF50' }).setOrigin(1, 0).setDepth(10);
+    this.add
+      .text(width - 20, 80, 'PLANKTON', caption(11, COLORS_CSS.success))
+      .setOrigin(1, 0)
+      .setDepth(10);
 
     // Barra da Habilidade Suprema (canto inferior esquerdo)
     const barX = 20;
     const barY = this.scale.height - 46;
-    const barW = 220;
-    const barH = 14;
-    this.add.rectangle(barX + barW / 2, barY, barW, barH, 0x222222).setDepth(10);
+    const barW = BossPhaseScene.SKILL_BAR_W;
+    const barH = BossPhaseScene.SKILL_BAR_H;
+
+    const track = this.add.graphics().setDepth(10);
+    track.fillStyle(COLORS.panelDark, 0.85);
+    track.fillRoundedRect(barX, barY - barH / 2, barW, barH, barH / 2);
+    track.lineStyle(1, COLORS.skill, 0.25);
+    track.strokeRoundedRect(barX, barY - barH / 2, barW, barH, barH / 2);
+
     this.skillBarFill = this.add
-      .rectangle(barX, barY, 0, barH, 0x39ff14)
+      .rectangle(barX + 2, barY, 0, barH - 4, COLORS.skill)
       .setOrigin(0, 0.5)
       .setDepth(11);
-    this.add
-      .text(barX, barY - 22, 'SUPREMA — Q', { fontSize: '12px', color: '#39FF14' })
+    this.skillLabel = this.add
+      .text(barX, barY - 24, 'SUPREMA — [Q]', caption(11, COLORS_CSS.skill))
       .setDepth(10);
   }
 
   private buildControlsHint(width: number, height: number): void {
     this.add
-      .text(width / 2, height - 8, this.getControlsHint(), {
-        fontSize: '12px', color: '#8D6E63',
-      })
+      .text(width / 2, height - 8, this.getControlsHint(), mono(11, COLORS_CSS.textDim))
       .setOrigin(0.5, 1)
+      .setAlpha(0.7)
       .setDepth(10);
   }
 
@@ -332,30 +447,63 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     if (hp === this.planktonHpLast) return;
     const lost = this.planktonHpLast - hp;
     for (let i = 0; i < lost; i++) {
-      const heart = this.planktonHearts[this.planktonHpLast - 1 - i];
-      if (heart?.visible) {
+      const pip = this.planktonHearts[this.planktonHpLast - 1 - i];
+      if (pip?.visible) {
+        impactBurst(this, pip.x, pip.y, { core: 0xffffff, mid: COLORS.danger, halo: 0x7f0000 }, {
+          particles: 5,
+          scale: 0.7,
+          depth: 12,
+        });
         this.tweens.add({
-          targets: heart, scaleX: 0, scaleY: 0, duration: 300,
-          onComplete: () => heart.setVisible(false),
+          targets: pip, scaleX: 0, scaleY: 0, duration: 300,
+          onComplete: () => pip.setVisible(false),
         });
       }
     }
     this.planktonHpLast = hp;
+
+    // Último pip pulsa em alerta
+    if (hp === 1 && !this.lowHpPulse) {
+      const last = this.planktonHearts[0];
+      last.setTint(COLORS.danger);
+      this.lowHpPulse = this.tweens.add({
+        targets: last,
+        scale: 1.25,
+        duration: 320,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
   }
 
   private updateSkillBar(): void {
-    const barW = 220;
+    const barW = BossPhaseScene.SKILL_BAR_W - 4;
     this.skillBarFill.width = barW * this.skillCharge.getPercent();
 
-    if (this.skillCharge.isReady() && !this.skillReadyPulse) {
+    const ready = this.skillCharge.isReady();
+    if (ready && !this.skillWasReady) {
+      // Rising edge: burst único + label de prontidão
+      impactBurst(this, 20 + barW, this.scale.height - 46, ATTACK_PALETTES.suprema, {
+        particles: 12,
+        depth: 12,
+      });
+      this.skillLabel.setText('SUPREMA PRONTA — [Q]').setColor(COLORS_CSS.gold);
+    } else if (!ready && this.skillWasReady) {
+      this.skillLabel.setText('SUPREMA — [Q]').setColor(COLORS_CSS.skill);
+    }
+    this.skillWasReady = ready;
+
+    if (ready && !this.skillReadyPulse) {
       this.skillReadyPulse = this.tweens.add({
         targets: this.skillBarFill,
-        alpha: 0.5,
+        alpha: 0.55,
         duration: 350,
         yoyo: true,
         repeat: -1,
+        ease: 'Sine.easeInOut',
       });
-    } else if (!this.skillCharge.isReady() && this.skillReadyPulse) {
+    } else if (!ready && this.skillReadyPulse) {
       this.skillReadyPulse.stop();
       this.skillReadyPulse = null;
       this.skillBarFill.setAlpha(1);
@@ -366,7 +514,11 @@ export abstract class BossPhaseScene extends Phaser.Scene {
 
   private onBossDamaged(data: { currentHp: number; maxHp: number; bossId: BossId }): void {
     if (data.bossId !== this.boss.getBossId()) return;
-    this.bossHpFill.setDisplaySize(300 * (data.currentHp / data.maxHp), 20);
+    const barW = BossPhaseScene.BOSS_BAR_W - 4;
+    const pct = data.currentHp / data.maxHp;
+    // Fill responde rápido; o chip branco "escorre" atrás mostrando o dano
+    tweenBarTo(this, this.bossHpFill, barW, pct, 200);
+    tweenBarTo(this, this.bossHpChip, barW, pct, 600, 250);
   }
 
   private onBossDefeated(data: { bossId: BossId }): void {
@@ -374,20 +526,45 @@ export abstract class BossPhaseScene extends Phaser.Scene {
 
     GameState.getInstance().completePhase(this.boss.getBossId(), '');
 
-    this.add
-      .text(CONSTANTS.GAME_WIDTH / 2, CONSTANTS.GAME_HEIGHT / 2, this.getVictoryText(), {
-        fontSize: '28px', color: '#FFD700', fontStyle: 'bold',
-      })
+    const cx = CONSTANTS.GAME_WIDTH / 2;
+    const cy = CONSTANTS.GAME_HEIGHT / 2;
+
+    // Explosão de vitória em gold/orange sobre o boss
+    impactBurst(this, this.boss.x, this.boss.y, { core: 0xffffff, mid: COLORS.gold, halo: COLORS.orange }, {
+      particles: 30,
+      scale: 2.2,
+      depth: 19,
+    });
+
+    const victory = this.add
+      .text(cx, cy, this.getVictoryText(), display(40))
       .setOrigin(0.5)
-      .setDepth(20);
+      .setDepth(20)
+      .setScale(0);
+    this.tweens.add({
+      targets: victory,
+      scale: 1,
+      duration: 400,
+      ease: 'Back.easeOut',
+    });
+
+    const sub = this.add
+      .text(cx, cy + 42, '— FRAGMENTO RECUPERADO —', caption(13))
+      .setOrigin(0.5)
+      .setDepth(20)
+      .setAlpha(0);
+    this.tweens.add({ targets: sub, alpha: 1, duration: 400, delay: 300 });
 
     this.time.delayedCall(2000, () => {
-      this.scene.start(this.getNextSceneKey());
+      fadeToScene(this, this.getNextSceneKey(), undefined, 450);
     });
   }
 
   private onBossFinalPhase(data: { bossId: BossId }): void {
     if (data.bossId !== this.boss.getBossId()) return;
+    // Aura de fúria — único uso da Filters API (1 objeto, custo aceitável)
+    this.boss.enableFilters();
+    this.boss.filters?.internal.addGlow(this.getBossPalette().mid, 4);
     this.onBossFinalPhaseHook();
   }
 
@@ -397,22 +574,32 @@ export abstract class BossPhaseScene extends Phaser.Scene {
 
     const { width, height } = this.scale;
     this.physics.pause();
+    this.cameras.main.shake(150, 0.006);
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7).setDepth(30);
-    this.add
-      .text(width / 2, height / 2 - 40, 'PLANKTON FOI DERROTADO', {
-        fontSize: '34px', color: '#FF1744', fontStyle: 'bold',
-      })
+    const overlay = this.add
+      .rectangle(width / 2, height / 2, width, height, 0x000000, 0)
+      .setDepth(30);
+    this.tweens.add({ targets: overlay, fillAlpha: 0.75, duration: 300 });
+
+    const title = this.add
+      .text(width / 2, height / 2 - 40, 'PLANKTON FOI DERROTADO', display(36, COLORS_CSS.danger))
       .setOrigin(0.5)
-      .setDepth(31);
+      .setDepth(31)
+      .setAlpha(0);
+    this.tweens.add({ targets: title, alpha: 1, duration: 300 });
 
     const retry = this.add
-      .text(width / 2, height / 2 + 30, 'R  Tentar novamente', {
-        fontSize: '18px', color: '#FFD700',
-      })
+      .text(width / 2, height / 2 + 30, '[R] tentar novamente', mono(16, COLORS_CSS.gold))
       .setOrigin(0.5)
       .setDepth(31);
-    this.tweens.add({ targets: retry, alpha: 0.4, duration: 600, yoyo: true, repeat: -1 });
+    this.tweens.add({
+      targets: retry,
+      alpha: 0.45,
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
 
     // Diálogo não se repete no retry — a escolha já está registrada
     this.input.keyboard!.once('keydown-R', () => {
@@ -443,16 +630,31 @@ export abstract class BossPhaseScene extends Phaser.Scene {
   }
 
   private dropAnchor(x: number, groundY: number): void {
-    // Aviso no chão antes da queda — leitura clara pro jogador
-    const warning = this.add
-      .ellipse(x, groundY, 110, 18, 0x39ff14, 0.35)
+    // Aviso no chão antes da queda — anel espectral + pulso interno
+    const ring = this.add.graphics().setDepth(3);
+    ring.lineStyle(2, ATTACK_PALETTES.suprema.mid, 0.9);
+    ring.strokeEllipse(x, groundY, 110, 18);
+    const pulse = this.add
+      .ellipse(x, groundY, 96, 14, ATTACK_PALETTES.suprema.mid, 0.3)
       .setDepth(3);
-    this.tweens.add({ targets: warning, alpha: 0.1, duration: 150, yoyo: true, repeat: -1 });
+    this.tweens.add({
+      targets: pulse,
+      alpha: 0.08,
+      scaleX: 0.7,
+      scaleY: 0.7,
+      duration: 180,
+      yoyo: true,
+      repeat: -1,
+    });
 
     this.time.delayedCall(CONSTANTS.ANCHOR_WARNING_MS, () => {
-      warning.destroy();
+      ring.destroy();
+      pulse.destroy();
 
       const anchor = this.add.image(x, -40, 'anchor').setDepth(8);
+      // ≤4 âncoras vivas e curtas: o único outro uso da Filters API
+      anchor.enableFilters();
+      anchor.filters?.internal.addGlow(ATTACK_PALETTES.suprema.mid, 3);
       this.tweens.add({
         targets: anchor,
         y: groundY - 32,
@@ -462,9 +664,24 @@ export abstract class BossPhaseScene extends Phaser.Scene {
           this.cameras.main.shake(120, 0.006);
           this.applyAnchorDamage(x);
 
-          // Poeira do impacto
+          // Poeira do impacto + brasas espectrais subindo
           const dust = this.add.ellipse(x, groundY, 130, 24, 0x8d6e63, 0.5).setDepth(7);
           this.tweens.add({ targets: dust, alpha: 0, scaleX: 1.6, duration: 400, onComplete: () => dust.destroy() });
+
+          const embers = this.add
+            .particles(x, groundY - 10, makeParticleDot(this), {
+              speedY: { min: -120, max: -40 },
+              speedX: { min: -50, max: 50 },
+              lifespan: { min: 350, max: 650 },
+              scale: { start: 0.8, end: 0 },
+              alpha: { start: 0.9, end: 0 },
+              blendMode: Phaser.BlendModes.ADD,
+              tint: ATTACK_PALETTES.suprema.mid,
+              emitting: false,
+            })
+            .setDepth(9);
+          embers.explode(10, 0, 0);
+          this.time.delayedCall(700, () => embers.destroy());
 
           this.tweens.add({
             targets: anchor,

@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { CONSTANTS } from '../config/constants';
 import { EventBus } from '../core/EventBus';
 import { PlayerBase } from './PlayerBase';
+import { ATTACK_PALETTES } from '../config/theme';
 
 export class BobEsponja extends PlayerBase {
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -15,9 +16,10 @@ export class BobEsponja extends PlayerBase {
       projectileDamage: CONSTANTS.BOB_PROJECTILE_DAMAGE,
       projectileSpeed:  CONSTANTS.BOB_PROJECTILE_SPEED,
       fireCooldown:     CONSTANTS.BOB_FIRE_COOLDOWN,
-      projectileColor:  0x4fc3f7,
+      projectileColor:  ATTACK_PALETTES.bob.mid,
       projectileWidth:  14,
       projectileHeight: 14,
+      palette:          ATTACK_PALETTES.bob,
     });
 
     this.setDepth(2);
@@ -25,7 +27,12 @@ export class BobEsponja extends PlayerBase {
     this.walkAnimKey = 'bob-walk';
 
     this.label = scene.add
-      .text(x, y - 70, 'BOB', { fontSize: '14px', color: '#000000', fontStyle: 'bold' })
+      .text(x, y - 70, 'BOB', {
+        fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+        fontSize: '13px',
+        color: '#000000',
+        fontStyle: 'bold',
+      })
       .setOrigin(0.5)
       .setDepth(10);
   }

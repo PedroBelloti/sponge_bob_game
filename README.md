@@ -14,7 +14,7 @@
 | **Universo** | Bob Esponja — Fenda do Biquini |
 | **Plataforma** | Web (Browser) |
 | **Linguagem** | TypeScript 5.x — strict mode |
-| **Engine** | Phaser 5.x |
+| **Engine** | Phaser 4.x |
 | **Bundler** | Vite |
 
 ---
@@ -23,7 +23,7 @@
 
 | Camada | Tecnologia | Justificativa |
 |---|---|---|
-| Engine de jogo | Phaser 5 | Loop de jogo, física arcade, spritesheets, câmera, grupos de objetos nativos |
+| Engine de jogo | Phaser 4 | Loop de jogo, física arcade, spritesheets, câmera, grupos de objetos nativos. **Atenção: sem `preFX/postFX`** — ver `docs/guia_visual.md` §4 |
 | Linguagem | TypeScript strict | Tipagem forte em sistemas de jogo reduz bugs de estado e padrão de ataque |
 | Bundler | Vite | Hot reload instantâneo, build otimizado, suporte nativo a TypeScript |
 | LLM / Karen | Anthropic API (claude-sonnet-4-20250514) | Personalidade dinâmica da Karen baseada no histórico de escolhas do jogador |
@@ -65,6 +65,12 @@ Projéteis, partículas e efeitos visuais temporários usam object pooling — n
 
 Valores numéricos de gameplay (velocidades, danos, HP, timings, thresholds de fase final) vivem exclusivamente em `src/config/constants.ts`. Nunca hardcodar esses valores dentro de Entities ou Systems.
 
+### 3.7 Identidade visual centralizada em theme.ts
+
+Cores, fontes, paletas de ataque e efeitos visuais (glow, partículas, painéis, transições, barras animadas) vivem exclusivamente em `src/config/theme.ts`. Nenhuma Scene ou Entity define `fontSize`/`color` hardcoded nem cria efeito visual fora dos helpers do tema.
+
+O padrão completo — paleta por personagem, juice de combate em 4 estágios, plataformas one-way acessíveis com tema por fase, HUD, diálogo e transições — está documentado em **`docs/guia_visual.md`**, com checklist obrigatório para fases novas.
+
 ---
 
 ## 4. ESTRUTURA DE PASTAS
@@ -104,7 +110,9 @@ fora-do-cardume/
 │   │
 │   ├── config/
 │   │   ├── phaser.config.ts     # configuração global do Phaser (resolução, física, scenes)
-│   │   └── constants.ts         # todos os valores numéricos de gameplay
+│   │   ├── constants.ts         # todos os valores numéricos de gameplay
+│   │   └── theme.ts             # design system: cores, fontes, paletas de ataque,
+│   │                            #   glow assado, partículas, painéis, transições
 │   │
 │   ├── core/
 │   │   └── EventBus.ts          # pub/sub central — única forma de comunicação entre sistemas
@@ -154,7 +162,9 @@ fora-do-cardume/
 │       └── KarenService.ts      # chamadas à API da Anthropic com contexto acumulado do GameState
 │
 ├── docs/
-│   └── gdd.md                   # Game Design Document narrativo completo
+│   ├── guia_desenvolvimento.md  # Game Design Document narrativo completo
+│   └── guia_visual.md           # design system, juice de combate, plataformas,
+│                                #   HUD/diálogo — checklist obrigatório p/ fases novas
 │
 ├── package.json
 ├── tsconfig.json
@@ -346,6 +356,27 @@ abstract class BaseBoss extends Phaser.GameObjects.Container {
   abstract getBossId(): BossId;
 }
 ```
+
+### 7.1 Contrato da fase — BossPhaseScene
+
+Toda fase de boss herda de `BossPhaseScene` (esqueleto comum: Plankton + controles, HUD, pool de projéteis, Suprema, diálogo, game over/vitória). A subclasse implementa:
+
+```typescript
+protected abstract buildArena(width, height): void;        // cenário + ground/platforms
+protected abstract createBoss(width, height): BaseBoss;
+protected abstract getDialog(): DialogConfig;
+protected abstract getNextSceneKey(): string;
+protected abstract getBossProjectileTextureKey(): string;
+protected abstract getBossBarColor(): number;              // = palette.mid
+protected abstract getBossPalette(): AttackPalette;        // de ATTACK_PALETTES (theme.ts)
+protected abstract getBossName(): string;                  // exibido sobre a barra de HP
+```
+
+Helpers herdados que a fase DEVE usar:
+
+- `addOneWayPlatform(x, y, key)` — plataformas one-way (atravessa por baixo, pousa por cima). Degraus ≤125px para o pulo de 144px do Plankton — ver `docs/guia_visual.md` §6.
+- `getTrailEmitter(tint)` — rastro de projéteis compartilhado por cor (performance de pool).
+- Hooks opcionais: `applyMood()`, `onArenaCreate/Update()`, `onBossFinalPhaseHook()`.
 
 ---
 

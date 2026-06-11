@@ -35,7 +35,7 @@ export class Patrick extends BaseBoss {
       finalPhaseSpeedMultiplier: 1.3,
       finalPhaseDamageMultiplier: 1.2,
       projectilePoolSize: 15,
-      projectileColor: 0xffb74d,
+      projectileColor: 0xff8a65, // coral da paleta patrick do tema
       projectileWidth: 24,
       projectileHeight: 24,
       projectileSpeed: 380,
@@ -85,7 +85,12 @@ export class Patrick extends BaseBoss {
     this.add(g);
 
     const label = this.scene.add
-      .text(0, -80, 'PATRICK', { fontSize: '14px', color: '#333333', fontStyle: 'bold' })
+      .text(0, -80, 'PATRICK', {
+        fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+        fontSize: '13px',
+        color: '#333333',
+        fontStyle: 'bold',
+      })
       .setOrigin(0.5);
     this.add(label);
   }
@@ -155,6 +160,7 @@ export class Patrick extends BaseBoss {
 
     // Impacto da barrigada
     this.scene.cameras.main.shake(150, 0.006);
+    this.spawnShockwaveRing(waveY);
 
     // Janela de punição clara: 2s caído antes de se levantar (GDD)
     this.scene.time.delayedCall(2000, () => {
@@ -192,6 +198,47 @@ export class Patrick extends BaseBoss {
       duration: duration / 2,
       yoyo: true,
       ease: 'Sine.easeInOut',
+    });
+
+    // Flash coral atrás do corpo — o aviso lê de longe
+    const aura = this.scene.add
+      .ellipse(this.x, this.y, 130, 150, 0xff8a65, 0)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(1);
+    this.scene.tweens.add({
+      targets: aura,
+      fillAlpha: 0.4,
+      duration: duration / 2,
+      yoyo: true,
+      ease: 'Sine.easeInOut',
+      onComplete: () => aura.destroy(),
+    });
+  }
+
+  // Anel + poeira na barrigada: a onda de choque ganha borda de leitura
+  private spawnShockwaveRing(waveY: number): void {
+    const ring = this.scene.add
+      .ellipse(this.x, waveY, 60, 18)
+      .setStrokeStyle(3, 0xff7043, 0.9)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(6);
+    this.scene.tweens.add({
+      targets: ring,
+      scaleX: 5,
+      scaleY: 2,
+      alpha: 0,
+      duration: 380,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+
+    const dust = this.scene.add.ellipse(this.x, waveY + 4, 140, 26, 0xd7ccc8, 0.5).setDepth(5);
+    this.scene.tweens.add({
+      targets: dust,
+      alpha: 0,
+      scaleX: 1.8,
+      duration: 420,
+      onComplete: () => dust.destroy(),
     });
   }
 }

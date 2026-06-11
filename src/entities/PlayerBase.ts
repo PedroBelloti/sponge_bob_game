@@ -1,5 +1,7 @@
 import * as Phaser from 'phaser';
 import { CONSTANTS } from '../config/constants';
+import { makeGlowCapsule, makeGlowTexture, makeParticleDot } from '../config/theme';
+import type { AttackPalette } from '../config/theme';
 
 export interface PlayerStats {
   speed: number;
@@ -14,6 +16,8 @@ export interface PlayerStats {
   projectileColor: number;    // hex, e.g. 0xFF6F00
   projectileWidth: number;
   projectileHeight: number;
+  /** Paleta de glow do projétil (trail, muzzle flash, textura assada). */
+  palette: AttackPalette;
 }
 
 export type WASDKeys = {
@@ -49,6 +53,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
   protected readonly idleTextureKey: string;
 
   private projectilePool!: Phaser.Physics.Arcade.Group;
+  private trailEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private airDashUsed: boolean = false;
   private slowTimer: Phaser.Time.TimerEvent | null = null;
   private activeSyncTween: Phaser.Tweens.Tween | null = null;
@@ -71,6 +76,18 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
 
     this.ensureProjectileTexture();
     this.projectilePool = scene.physics.add.group({ maxSize: 15 });
+
+    // Rastro compartilhado por todos os projéteis (frequency -1 = manual)
+    this.trailEmitter = scene.add
+      .particles(0, 0, makeParticleDot(scene), {
+        lifespan: 220,
+        scale: { start: 0.55, end: 0 },
+        alpha: { start: 0.5, end: 0 },
+        blendMode: Phaser.BlendModes.ADD,
+        tint: stats.palette.mid,
+        frequency: -1,
+      })
+      .setDepth(3);
   }
 
   // ── Abstract interface ────────────────────────────────────────
@@ -263,6 +280,8 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     if (!p) return;
 
     p.setActive(true).setVisible(true);
+    p.setBlendMode(Phaser.BlendModes.ADD); // textura tem glow assado
+    p.setRotation(snapped);                // cápsula aponta na direção do tiro
     const body = p.body as Phaser.Physics.Arcade.Body;
     body.reset(this.x, this.y);
     body.setAllowGravity(false);
@@ -270,6 +289,34 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
       Math.cos(snapped) * this.stats.projectileSpeed,
       Math.sin(snapped) * this.stats.projectileSpeed,
     );
+
+    this.spawnMuzzleFlash(snapped);
+  }
+
+  // Clarão no cano + fagulhas direcionais — o disparo ganha peso
+  private spawnMuzzleFlash(angle: number): void {
+    const key = `muzzle-${this.stats.palette.mid.toString(16)}`;
+    makeGlowTexture(this.scene, key, this.stats.palette, 12);
+    const mx = this.x + Math.cos(angle) * 18;
+    const my = this.y + Math.sin(angle) * 18;
+    const flash = this.scene.add
+      .image(mx, my, key)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setRotation(angle)
+      .setDepth(3)
+      .setScale(0.6)
+      .setAlpha(0.9);
+    this.scene.tweens.add({
+      targets: flash,
+      scale: 1.4,
+      alpha: 0,
+      duration: 90,
+      ease: 'Quad.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+
+    // Pequeno sopro de fagulhas no cano (reusa o emitter de rastro)
+    this.trailEmitter.emitParticleAt(mx, my, 3);
   }
 
   private cullingProjectiles(): void {
@@ -281,7 +328,10 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
       if (p.x < -20 || p.x > w + 20 || p.y < -20 || p.y > h + 20) {
         p.setActive(false).setVisible(false);
         (p.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+        return;
       }
+      // Rastro luminoso — o loop já visita todo projétil ativo por frame
+      this.trailEmitter.emitParticleAt(p.x, p.y);
     });
   }
 
@@ -290,11 +340,15 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
   private ensureProjectileTexture(): void {
     const key = this.getProjectileTextureKey();
     if (this.scene.textures.exists(key)) return;
-    const g = this.scene.add.graphics();
-    g.fillStyle(this.stats.projectileColor, 1);
-    g.fillRect(0, 0, this.stats.projectileWidth, this.stats.projectileHeight);
-    g.generateTexture(key, this.stats.projectileWidth, this.stats.projectileHeight);
-    g.destroy();
+    const w = this.stats.projectileWidth;
+    const h = this.stats.projectileHeight;
+    if (w / h >= 2) {
+      // Formato de feixe → cápsula com glow assado
+      makeGlowCapsule(this.scene, key, this.stats.palette, w + 8, h + 8);
+    } else {
+      // Formato de bolha/esfera → glow radial
+      makeGlowTexture(this.scene, key, this.stats.palette, Math.ceil(Math.max(w, h) / 2) + 4);
+    }
   }
 
   // ── Public API ────────────────────────────────────────────────
@@ -376,6 +430,21 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     this.setTint(0x81d4fa);
     (this.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
 
+    // Estilhaços de gelo se cravam ao redor do personagem
+    const shards = this.scene.add
+      .particles(this.x, this.y, makeParticleDot(this.scene), {
+        speed: { min: 40, max: 140 },
+        lifespan: { min: 250, max: 500 },
+        scale: { start: 0.9, end: 0 },
+        alpha: { start: 0.95, end: 0 },
+        blendMode: Phaser.BlendModes.ADD,
+        tint: 0xb2ebf2,
+        emitting: false,
+      })
+      .setDepth(4);
+    shards.explode(6, 0, 0);
+    this.scene.time.delayedCall(550, () => shards.destroy());
+
     this.freezeTimer = this.scene.time.delayedCall(duration, () => {
       this.isFrozen = false;
       this.clearTint();
@@ -393,6 +462,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
 
   destroy(fromScene?: boolean): void {
     this.label?.destroy();
+    this.trailEmitter?.destroy();
     super.destroy(fromScene);
   }
 }
