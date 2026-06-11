@@ -35,25 +35,4 @@ export class BobEsponja extends PlayerBase {
   getProjectileTextureKey(): string {
     return 'bob-projectile';
   }
-
-  protected onDashStart(_direction: number): void {
-    const GHOST_COUNT = 4;
-    const SPAWN_INTERVAL = 35;
-    for (let i = 0; i < GHOST_COUNT; i++) {
-      this.scene.time.delayedCall(i * SPAWN_INTERVAL, () => {
-        if (!this.active) return;
-        const ghost = this.scene.add.image(this.x, this.y, 'bob-placeholder');
-        ghost.setFlipX(this.flipX);
-        ghost.setScale(this.scaleX, this.scaleY);
-        ghost.setAlpha(0.35).setDepth(1);
-        this.scene.tweens.add({
-          targets: ghost,
-          alpha: 0,
-          duration: 280,
-          ease: 'Linear',
-          onComplete: () => ghost.destroy(),
-        });
-      });
-    }
-  }
 }

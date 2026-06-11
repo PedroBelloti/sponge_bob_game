@@ -24,6 +24,9 @@ export interface ProjectileData {
   velocityX: number;
   velocityY: number;
   damage: number;
+  textureKey?: string;   // default: textura padrão do boss na cena
+  bounce?: boolean;      // quica nas paredes (notas do Lula na fase final)
+  lifespanMs?: number;   // TTL para projéteis que não saem da tela
 }
 
 export abstract class BaseBoss extends Phaser.GameObjects.Container {
@@ -49,6 +52,7 @@ export abstract class BaseBoss extends Phaser.GameObjects.Container {
   abstract m1(time: number, targetX?: number, targetY?: number): ProjectileData[];
   abstract m2(time: number, targetX?: number, targetY?: number): ProjectileData[];
   abstract onFinalPhase(): void;
+  abstract getHitBounds(): Phaser.Geom.Rectangle;
 
   // ── Concrete methods ──────────────────────────────────────────
 

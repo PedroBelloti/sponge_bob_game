@@ -4,8 +4,26 @@ import type { BossId } from '../../core/EventBus';
 import { BaseBoss } from './BaseBoss';
 import type { BossConfig, ProjectileData } from './BaseBoss';
 
+// GDD: a escolha de diálogo molda o comportamento do boss.
+// A — "isso aí não é seu"     → desorientado: lento e imprevisível
+// B — "brincar de pega-pega?" → animado: cadência alta, padrões legíveis
+export type PatrickMood = 'desorientado' | 'animado' | null;
+
+const TELEGRAPH_M1_MS = 350;
+const TELEGRAPH_M2_MS = 500;
+
+const MOOD_COOLDOWN: Record<Exclude<PatrickMood, null>, number> = {
+  desorientado: 1.35,
+  animado: 0.6,
+};
+
 export class Patrick extends BaseBoss {
   private isDoingM2: boolean = false;
+  private mood: PatrickMood = null;
+
+  // Telegraph: instante em que o ataque pendente dispara (null = sem pendência)
+  private pendingM1At: number | null = null;
+  private pendingM2At: number | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     const config: BossConfig = {
@@ -24,6 +42,27 @@ export class Patrick extends BaseBoss {
       projectileDamage: CONSTANTS.PATRICK_PROJECTILE_DAMAGE,
     };
     super(scene, x, y, config);
+  }
+
+  // ── Mood (escolha de diálogo) ─────────────────────────────────
+
+  setMood(mood: PatrickMood): void {
+    this.mood = mood;
+  }
+
+  private moodCooldown(base: number): number {
+    return this.mood ? base * MOOD_COOLDOWN[this.mood] : base;
+  }
+
+  // Desorientado: ângulo e velocidade ganham variação imprevisível
+  private moodJitterAngle(rad: number): number {
+    if (this.mood !== 'desorientado') return rad;
+    return rad + Phaser.Math.DegToRad(Phaser.Math.Between(-12, 12));
+  }
+
+  private moodJitterSpeed(speed: number): number {
+    if (this.mood !== 'desorientado') return speed;
+    return speed * Phaser.Math.FloatBetween(0.8, 1.2);
   }
 
   // ── BaseBoss impl ─────────────────────────────────────────────
@@ -52,53 +91,72 @@ export class Patrick extends BaseBoss {
   }
 
   m1(time: number, targetX?: number): ProjectileData[] {
-    if (time - this.lastM1Time < this.config.m1Cooldown) return [];
     if (this.isDoingM2) return [];
+
+    // Fase 1 do ataque: cooldown vencido → telegraph (pulso) e agenda o disparo
+    if (this.pendingM1At === null) {
+      if (time - this.lastM1Time < this.moodCooldown(this.config.m1Cooldown)) return [];
+      this.pendingM1At = time + TELEGRAPH_M1_MS;
+      this.telegraphPulse(1.08, TELEGRAPH_M1_MS);
+      return [];
+    }
+
+    // Fase 2: aguarda o fim do telegraph e dispara
+    if (time < this.pendingM1At) return [];
+    this.pendingM1At = null;
     this.lastM1Time = time;
 
-    const speed = this.isFinalPhase
+    const baseSpeed = this.isFinalPhase
       ? this.config.projectileSpeed * this.config.finalPhaseSpeedMultiplier
       : this.config.projectileSpeed;
     const damage = this.config.projectileDamage;
     const goLeft = (targetX ?? 0) < this.x;
+    const dir = goLeft ? -1 : 1;
 
-    if (this.isFinalPhase) {
-      // 3 pedras: -10°, 0°, +10°
-      return [-10, 0, 10].map((deg) => {
-        const rad = Phaser.Math.DegToRad(deg);
-        const dir = goLeft ? -1 : 1;
-        return {
-          x: this.x,
-          y: this.y,
-          velocityX: Math.cos(rad) * speed * dir,
-          velocityY: Math.sin(rad) * speed,
-          damage,
-        };
-      });
-    }
-
-    return [{
-      x: this.x,
-      y: this.y,
-      velocityX: goLeft ? -speed : speed,
-      velocityY: 0,
-      damage,
-    }];
+    const angles = this.isFinalPhase ? [-10, 0, 10] : [0];
+    return angles.map((deg) => {
+      const rad = this.moodJitterAngle(Phaser.Math.DegToRad(deg));
+      const speed = this.moodJitterSpeed(baseSpeed);
+      return {
+        x: this.x,
+        y: this.y,
+        velocityX: Math.cos(rad) * speed * dir,
+        velocityY: Math.sin(rad) * speed,
+        damage,
+      };
+    });
   }
 
   m2(time: number): ProjectileData[] {
-    if (time - this.lastM2Time < this.config.m2Cooldown) return [];
     if (this.isDoingM2) return [];
+
+    // Telegraph maior: Patrick "infla" antes da barrigada
+    if (this.pendingM2At === null) {
+      if (time - this.lastM2Time < this.moodCooldown(this.config.m2Cooldown)) return [];
+      this.pendingM2At = time + TELEGRAPH_M2_MS;
+      this.telegraphPulse(1.18, TELEGRAPH_M2_MS);
+      return [];
+    }
+
+    if (time < this.pendingM2At) return [];
+    this.pendingM2At = null;
     this.lastM2Time = time;
     this.isDoingM2 = true;
+    this.pendingM1At = null; // M1 telegrafado antes da barrigada não dispara "do nada" depois
 
     const damage = Math.round(
       this.config.projectileDamage *
       (this.isFinalPhase ? this.config.finalPhaseDamageMultiplier : 1),
     );
-    const waveSpeed = 400 * (this.isFinalPhase ? this.config.finalPhaseSpeedMultiplier : 1);
+    const waveSpeed = this.moodJitterSpeed(
+      400 * (this.isFinalPhase ? this.config.finalPhaseSpeedMultiplier : 1),
+    );
     const waveY = this.y + 55; // ground level (feet of Patrick)
 
+    // Impacto da barrigada
+    this.scene.cameras.main.shake(150, 0.006);
+
+    // Janela de punição clara: 2s caído antes de se levantar (GDD)
     this.scene.time.delayedCall(2000, () => {
       this.isDoingM2 = false;
     });
@@ -110,7 +168,6 @@ export class Patrick extends BaseBoss {
   }
 
   onFinalPhase(): void {
-    console.log('[Patrick] FASE FINAL');
     this.scene.tweens.add({
       targets: this,
       scaleX: 1.15,
@@ -123,5 +180,18 @@ export class Patrick extends BaseBoss {
 
   getHitBounds(): Phaser.Geom.Rectangle {
     return new Phaser.Geom.Rectangle(this.x - 50, this.y - 60, 100, 120);
+  }
+
+  // ── Telegraph visual ──────────────────────────────────────────
+
+  private telegraphPulse(scaleTo: number, duration: number): void {
+    this.scene.tweens.add({
+      targets: this,
+      scaleX: scaleTo,
+      scaleY: scaleTo,
+      duration: duration / 2,
+      yoyo: true,
+      ease: 'Sine.easeInOut',
+    });
   }
 }

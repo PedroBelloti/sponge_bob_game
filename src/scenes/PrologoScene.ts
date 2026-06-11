@@ -91,6 +91,11 @@ export class PrologoScene extends Phaser.Scene {
     this.input.mouse?.disableContextMenu();
 
     EventBus.on('prologo:bob-derrotado', this.onBobDefeated, this);
+
+    // Phaser não chama método shutdown() automaticamente — limpeza via evento
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      EventBus.off('prologo:bob-derrotado', this.onBobDefeated);
+    });
   }
 
   // ── Background ────────────────────────────────────────────────
@@ -237,10 +242,6 @@ export class PrologoScene extends Phaser.Scene {
     });
 
     this.drawRoboHpBar();
-  }
-
-  shutdown(): void {
-    EventBus.off('prologo:bob-derrotado', this.onBobDefeated);
   }
 
   // ── Texturas ──────────────────────────────────────────────────

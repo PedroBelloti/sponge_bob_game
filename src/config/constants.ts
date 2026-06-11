@@ -38,6 +38,18 @@ export const CONSTANTS = {
   // Patrick
   PATRICK_PROJECTILE_DAMAGE: 1,
 
+  // Lula Molusco
+  LULA_NOTE_DAMAGE: 1,
+  LULA_NOTE_SPEED: 430,
+  LULA_NOTES_PER_BURST: 5,           // GDD: cinco notas em linha reta
+  LULA_STATUE_HP: 50,                // 2 acertos de laser destroem
+  LULA_STATUE_COUNTDOWN_MS: 3000,    // GDD: explode após 3 segundos
+  LULA_STATUE_COOLDOWN_MS: 9000,
+  LULA_STATUE_EXPLOSION_RADIUS: 160,
+  LULA_STATUE_DAMAGE: 1,
+  SPOTLIGHT_WIDTH: 110,
+  SPOTLIGHT_TRAVEL_SPEED: 150,       // px/s — GDD: velocidade constante
+
   // Bob jogável — controles e stats de combate
   BOB_SPEED: 220,
   BOB_JUMP_VELOCITY: 520,
@@ -48,6 +60,20 @@ export const CONSTANTS = {
   BOB_PROJECTILE_DAMAGE: 3,
   BOB_PROJECTILE_SPEED: 550,
   BOB_FIRE_COOLDOWN: 380,
+
+  // Habilidade Suprema — Âncoras Amaldiçoadas (Holandês Voador)
+  ANCHOR_COUNT: 4,
+  ANCHOR_WARNING_MS: 600,       // aviso no chão antes da queda
+  ANCHOR_STAGGER_MS: 140,       // intervalo entre âncoras (padrão diagonal)
+  ANCHOR_DAMAGE_DIRECT: 100,    // dano massivo no impacto direto
+  ANCHOR_DAMAGE_SPLASH: 40,     // dano indireto reduzido significativamente (GDD)
+  ANCHOR_DIRECT_RADIUS: 90,
+  ANCHOR_SPLASH_RADIUS: 200,
+
+  // Game feel — pulo (compartilhado por todos os jogáveis)
+  COYOTE_TIME_MS: 100,        // janela pós-borda em que o pulo ainda vale
+  JUMP_BUFFER_MS: 130,        // pulo apertado um pouco antes de pousar é executado
+  JUMP_CUT_MULTIPLIER: 0.45,  // soltar o botão durante a subida corta a velocidade
 
   // Plankton jogável — stats de combate
   PLANKTON_SPEED: 200,

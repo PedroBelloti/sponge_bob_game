@@ -44,6 +44,11 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
   private slowTimer: Phaser.Time.TimerEvent | null = null;
   private activeSyncTween: Phaser.Tweens.Tween | null = null;
 
+  // Game feel — pulo
+  private lastGroundedTime: number = -Infinity; // coyote time
+  private lastJumpPressTime: number = -Infinity; // jump buffer
+  private jumpCutApplied: boolean = false;
+
   constructor(scene: Phaser.Scene, x: number, y: number, texture: string, stats: PlayerStats) {
     super(scene, x, y, texture);
     this.stats = stats;
@@ -62,7 +67,27 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
   abstract onDeath(): void;
   abstract getProjectileTextureKey(): string;
 
-  protected onDashStart(_direction: number): void {}
+  // Ghost trail padrão — subclasses podem sobrescrever para efeitos próprios
+  protected onDashStart(_direction: number): void {
+    const GHOST_COUNT = 4;
+    const SPAWN_INTERVAL = 35;
+    for (let i = 0; i < GHOST_COUNT; i++) {
+      this.scene.time.delayedCall(i * SPAWN_INTERVAL, () => {
+        if (!this.active) return;
+        const ghost = this.scene.add.image(this.x, this.y, this.texture.key);
+        ghost.setFlipX(this.flipX);
+        ghost.setScale(this.scaleX, this.scaleY);
+        ghost.setAlpha(0.35).setDepth(1);
+        this.scene.tweens.add({
+          targets: ghost,
+          alpha: 0,
+          duration: 280,
+          ease: 'Linear',
+          onComplete: () => ghost.destroy(),
+        });
+      });
+    }
+  }
 
   // ── Update loop ───────────────────────────────────────────────
 
@@ -75,11 +100,14 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
   ): void {
     const body = this.body as Phaser.Physics.Arcade.Body;
     this.isOnGround = body.blocked.down;
-    if (this.isOnGround) this.airDashUsed = false;
+    if (this.isOnGround) {
+      this.airDashUsed = false;
+      this.lastGroundedTime = time;
+    }
 
     this.handleCrouch(wasd);
     this.handleMovement(wasd);
-    this.handleJump(wasd, spaceKey);
+    this.handleJump(wasd, spaceKey, time);
     this.handleDash(dashKey, time);
     this.handleFire(pointer, time);
     this.cullingProjectiles();
@@ -109,10 +137,34 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
-  private handleJump(wasd: WASDKeys, spaceKey: Phaser.Input.Keyboard.Key): void {
-    if (!this.isOnGround || this.isCrouching) return;
-    if (wasd.W.isDown || spaceKey.isDown) {
-      (this.body as Phaser.Physics.Arcade.Body).setVelocityY(this.stats.jumpVelocity);
+  private handleJump(wasd: WASDKeys, spaceKey: Phaser.Input.Keyboard.Key, time: number): void {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+
+    // Jump buffer: registra a intenção mesmo que ainda esteja no ar
+    if (Phaser.Input.Keyboard.JustDown(wasd.W) || Phaser.Input.Keyboard.JustDown(spaceKey)) {
+      this.lastJumpPressTime = time;
+    }
+
+    // Coyote time: pulo ainda vale logo após sair da borda
+    const buffered = time - this.lastJumpPressTime <= CONSTANTS.JUMP_BUFFER_MS;
+    const grounded = this.isOnGround || time - this.lastGroundedTime <= CONSTANTS.COYOTE_TIME_MS;
+
+    if (buffered && grounded && !this.isCrouching) {
+      body.setVelocityY(this.stats.jumpVelocity);
+      this.lastJumpPressTime = -Infinity; // consome o buffer
+      this.lastGroundedTime = -Infinity;  // consome o coyote (evita pulo duplo)
+      this.jumpCutApplied = false;
+    }
+
+    // Altura variável: soltar o botão durante a subida corta a velocidade
+    if (
+      !this.jumpCutApplied &&
+      body.velocity.y < 0 &&
+      !wasd.W.isDown &&
+      !spaceKey.isDown
+    ) {
+      body.setVelocityY(body.velocity.y * CONSTANTS.JUMP_CUT_MULTIPLIER);
+      this.jumpCutApplied = true;
     }
   }
 
@@ -221,6 +273,9 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
 
     this.currentHp = Math.max(0, this.currentHp - amount);
     this.isInvincible = true;
+
+    // Feedback de impacto — shake curto e sutil
+    this.scene.cameras.main.shake(120, 0.004);
 
     this.scene.tweens.add({
       targets: this,
