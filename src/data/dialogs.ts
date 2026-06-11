@@ -13,6 +13,20 @@ export const DIALOG_PROLOGO: DialogConfig = {
   nextScene: 'Phase1Scene',
 };
 
+export const DIALOG_LULA: DialogConfig = {
+  bossId: 'lula',
+  speakerName: 'LULA MOLUSCO',
+  lines: [
+    'Plankton. Claro. Só você mesmo para interromper meu recital.',
+    'Esse fragmento brilhante caiu no meu palco. Agora faz parte do espetáculo.',
+    'Se o quer de volta, vai ter que aguentar a minha sinfonia.',
+  ],
+  choiceA: 'Você também sabe como é não pertencer a lugar nenhum, não sabe?',
+  choiceB: 'Sua arte é medíocre e você sabe disso.',
+  nextScene: 'Phase2Scene',
+  nextSceneData: { bossDialogDone: true },
+};
+
 export const DIALOG_PATRICK: DialogConfig = {
   bossId: 'patrick',
   speakerName: 'PATRICK',
