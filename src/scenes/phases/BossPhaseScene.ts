@@ -82,6 +82,8 @@ export abstract class BossPhaseScene extends Phaser.Scene {
   protected onArenaUpdate(_time: number): void {}
   protected onBossFinalPhaseHook(): void {}
   protected getVictoryText(): string { return 'Fragmento recuperado!'; }
+  /** Velocidade de carga da barra de suprema (1 = normal; <1 = mais lenta). */
+  protected supremeChargeScale(): number { return 1; }
   protected getControlsHint(): string {
     return 'WASD Mover   ESPAÇO/W Pular   CLICK Atirar   SHIFT Dash   S Agachar   Q Suprema';
   }
@@ -97,7 +99,7 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     this.isGameOver = false;
     this.planktonHearts = [];
     this.planktonHpLast = CONSTANTS.PLANKTON_MAX_HP;
-    this.skillCharge = new SkillCharge();
+    this.skillCharge = new SkillCharge(this.supremeChargeScale());
     this.skillReadyPulse = null;
     this.skillWasReady = false;
     this.lowHpPulse = null;

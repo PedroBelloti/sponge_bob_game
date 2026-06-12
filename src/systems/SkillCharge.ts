@@ -9,11 +9,14 @@ import { EventBus } from '../core/EventBus';
 export class SkillCharge {
   private charge = 0;
 
+  /** rateScale < 1 = carrega mais devagar (ex.: barra mais lenta no boss final). */
+  constructor(private readonly rateScale: number = 1) {}
+
   addFromDamage(damage: number): void {
     if (this.isReady()) return;
     this.charge = Math.min(
       CONSTANTS.SKILL_MAX_CHARGE,
-      this.charge + damage * CONSTANTS.SKILL_CHARGE_RATE,
+      this.charge + damage * CONSTANTS.SKILL_CHARGE_RATE * this.rateScale,
     );
     this.emitUpdate();
   }

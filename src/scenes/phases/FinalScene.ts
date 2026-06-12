@@ -93,6 +93,11 @@ export class FinalScene extends BossPhaseScene {
     return this.finalBoss;
   }
 
+  // Barra de suprema bem mais lenta na luta final (auto-cast esporádico)
+  protected override supremeChargeScale(): number {
+    return 0.35;
+  }
+
   // Laser preciso → atinge o combatente específico (não dano em área)
   protected override getBossHitTargets() {
     if (this.finalBoss.isBossDefeated()) return [];
