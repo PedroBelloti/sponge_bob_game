@@ -84,6 +84,8 @@ export abstract class BossPhaseScene extends Phaser.Scene {
   protected getVictoryText(): string { return 'Fragmento recuperado!'; }
   /** Velocidade de carga da barra de suprema (1 = normal; <1 = mais lenta). */
   protected supremeChargeScale(): number { return 1; }
+  /** Suprema das âncoras em padrão de grade (jogo da velha) — só no boss final. */
+  protected useAnchorGrid(): boolean { return false; }
   protected getControlsHint(): string {
     return 'WASD Mover   ESPAÇO/W Pular   CLICK Atirar   SHIFT Dash   S Agachar   Q Suprema';
   }
@@ -745,12 +747,65 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     this.tweens.add({ targets: flash, alpha: 0, duration: 700, onComplete: () => flash.destroy() });
     this.cameras.main.shake(200, 0.005);
 
+    if (this.useAnchorGrid()) {
+      // Jogo da velha de âncoras: 2 colunas (caem) + 2 linhas (varrem)
+      const xs = [width * 0.42, width * 0.66];
+      const ys = [height * 0.40, height * 0.62];
+      xs.forEach((x, i) => this.time.delayedCall(i * CONSTANTS.ANCHOR_STAGGER_MS, () => this.dropAnchor(x, groundY)));
+      ys.forEach((y, i) => this.time.delayedCall(i * CONSTANTS.ANCHOR_STAGGER_MS + 90, () => this.sweepHorizontalAnchor(y)));
+      return;
+    }
+
     // Padrão diagonal cobrindo bem mais da tela
     const start = width / 5 + 30;
     const span = width - start - 70;
     for (let i = 0; i < CONSTANTS.ANCHOR_COUNT; i++) {
       const x = start + (span / (CONSTANTS.ANCHOR_COUNT - 1)) * i;
       this.time.delayedCall(i * CONSTANTS.ANCHOR_STAGGER_MS, () => this.dropAnchor(x, groundY));
+    }
+  }
+
+  /** Âncora horizontal que varre a arena (linhas do jogo da velha). */
+  private sweepHorizontalAnchor(y: number): void {
+    const { width } = this.scale;
+
+    // Aviso: linha horizontal tracejada
+    const warn = this.add.graphics().setDepth(3);
+    warn.lineStyle(3, ATTACK_PALETTES.suprema.mid, 0.85);
+    for (let x = 0; x < width; x += 30) {
+      warn.lineBetween(x, y, Math.min(x + 18, width), y);
+    }
+    this.tweens.add({ targets: warn, alpha: 0.25, duration: CONSTANTS.ANCHOR_WARNING_MS / 3, yoyo: true, repeat: 1 });
+
+    this.time.delayedCall(CONSTANTS.ANCHOR_WARNING_MS, () => {
+      warn.destroy();
+
+      const anchor = this.add.image(-50, y, 'anchor').setDepth(8).setAngle(-90);
+      anchor.enableFilters();
+      anchor.filters?.internal.addGlow(ATTACK_PALETTES.suprema.mid, 3);
+      this.tweens.add({
+        targets: anchor,
+        x: width + 50,
+        duration: 520,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.cameras.main.shake(80, 0.004);
+          anchor.destroy();
+        },
+      });
+
+      this.applyAnchorDamageH(y);
+    });
+  }
+
+  /** Dano da âncora horizontal — por distância VERTICAL até o boss. */
+  private applyAnchorDamageH(anchorY: number): void {
+    if (this.boss.isBossDefeated()) return;
+    const dist = Math.abs(this.boss.y - anchorY);
+    if (dist <= CONSTANTS.ANCHOR_DIRECT_RADIUS) {
+      this.boss.receiveDamage(CONSTANTS.ANCHOR_DAMAGE_DIRECT);
+    } else if (dist <= CONSTANTS.ANCHOR_SPLASH_RADIUS) {
+      this.boss.receiveDamage(CONSTANTS.ANCHOR_DAMAGE_SPLASH);
     }
   }
 

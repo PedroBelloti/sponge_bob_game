@@ -98,6 +98,11 @@ export class FinalScene extends BossPhaseScene {
     return 0.35;
   }
 
+  // Âncoras em grade (jogo da velha) só na luta final
+  protected override useAnchorGrid(): boolean {
+    return true;
+  }
+
   // Laser preciso → atinge o combatente específico (não dano em área)
   protected override getBossHitTargets() {
     if (this.finalBoss.isBossDefeated()) return [];
@@ -242,12 +247,13 @@ export class FinalScene extends BossPhaseScene {
       this.updateHUD();
     }
 
-    // 1. Aplicar força das correntes marinhas sobre Plankton
+    // 1. Correntes marinhas: a da direita puxa bem mais forte; a da esquerda
+    //    aparece às vezes e é mais branda.
     const body = this.plankton.body as Phaser.Physics.Arcade.Body;
     if (this.currentDirection === 'left') {
-      body.setVelocityX(body.velocity.x - 70);
+      body.setVelocityX(body.velocity.x - 85);
     } else if (this.currentDirection === 'right') {
-      body.setVelocityX(body.velocity.x + 70);
+      body.setVelocityX(body.velocity.x + 150);
     }
 
     // 2. Bolhas de Mexilhãozinho: teleguiadas por 3s (homeUntil), depois reto
@@ -298,9 +304,9 @@ export class FinalScene extends BossPhaseScene {
   private cycleMarineCurrents(): void {
     if (this.isGameOver || this.finalBoss.isBossDefeated()) return;
 
-    const dirs: ('left' | 'right' | 'none')[] = ['left', 'none', 'right', 'none'];
-    const idx = (dirs.indexOf(this.currentDirection) + 1) % dirs.length;
-    this.currentDirection = dirs[idx];
+    // Predominância para a DIREITA; esquerda às vezes; calmaria de vez em quando.
+    const r = Math.random();
+    this.currentDirection = r < 0.5 ? 'right' : r < 0.72 ? 'left' : 'none';
 
     // Mostrar aviso na tela
     this.currentLabel?.destroy();
