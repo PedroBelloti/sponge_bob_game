@@ -88,29 +88,9 @@ export class LulaMolusco extends BaseBoss {
   }
 
   buildVisual(): void {
-    const g = this.scene.add.graphics();
-
-    // Cabeça/corpo
-    g.fillStyle(0x80cbc4, 1);
-    g.fillRoundedRect(-45, -65, 90, 95, 18);
-
-    // Camisa marrom
-    g.fillStyle(0x8d6e63, 1);
-    g.fillRect(-45, 12, 90, 53);
-
-    // Nariz caído
-    g.fillStyle(0x6fb3aa, 1);
-    g.fillEllipse(0, -8, 22, 42);
-
-    // Olhos entediados
-    g.fillStyle(0xfffde7, 1);
-    g.fillEllipse(-16, -42, 22, 16);
-    g.fillEllipse(16, -42, 22, 16);
-    g.fillStyle(0x4e342e, 1);
-    g.fillCircle(-16, -40, 4);
-    g.fillCircle(16, -40, 4);
-
-    this.add(g);
+    const sprite = this.scene.add.sprite(0, 0, 'lula-boss');
+    sprite.setDisplaySize(84, 130);
+    this.add(sprite);
 
     const label = this.scene.add
       .text(0, -88, 'LULA MOLUSCO', {

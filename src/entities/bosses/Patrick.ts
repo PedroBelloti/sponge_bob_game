@@ -72,17 +72,9 @@ export class Patrick extends BaseBoss {
   }
 
   buildVisual(): void {
-    const g = this.scene.add.graphics();
-
-    // Corpo
-    g.fillStyle(0xff8a65, 1);
-    g.fillRect(-50, -60, 100, 120);
-
-    // Barriga
-    g.fillStyle(0xffccbc, 1);
-    g.fillEllipse(0, 10, 60, 70);
-
-    this.add(g);
+    const sprite = this.scene.add.sprite(0, 0, 'patrick-boss');
+    sprite.setDisplaySize(120, 120);
+    this.add(sprite);
 
     const label = this.scene.add
       .text(0, -80, 'PATRICK', {

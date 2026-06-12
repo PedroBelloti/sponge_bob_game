@@ -63,6 +63,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('bob-walk-1', 'assets/bob-walk-1.png');
     this.load.image('bob-walk-2', 'assets/bob-walk-2.png');
     this.load.image('roboplankton', 'assets/roboplankton.png');
+    this.load.image('patrick-boss', 'assets/patrick.png');
+    this.load.image('sandy-boss',   'assets/sandy.png');
+    this.load.image('lula-boss',    'assets/lula.png');
 
     // ── Cenários reais (1280x720, recortados de docs/cenario_*.jpeg) ──
     this.load.image('bg-prologo', 'assets/bg-prologo.jpg');

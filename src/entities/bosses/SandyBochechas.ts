@@ -111,33 +111,9 @@ export class SandyBochechas extends BaseBoss {
   }
 
   buildVisual(): void {
-    const g = this.scene.add.graphics();
-
-    // Traje branco de astronauta
-    g.fillStyle(0xf5f5f5, 1);
-    g.fillRoundedRect(-40, -30, 80, 100, 16);
-
-    // Capacete de vidro
-    g.fillStyle(0xb3e5fc, 0.35);
-    g.fillCircle(0, -52, 34);
-    g.lineStyle(3, 0xcfd8dc, 1);
-    g.strokeCircle(0, -52, 34);
-
-    // Cabeça de esquilo
-    g.fillStyle(0x8d6e63, 1);
-    g.fillCircle(0, -52, 20);
-    g.fillStyle(0xffffff, 1);
-    g.fillCircle(-7, -56, 5);
-    g.fillCircle(7, -56, 5);
-    g.fillStyle(0x3e2723, 1);
-    g.fillCircle(-7, -55, 2.5);
-    g.fillCircle(7, -55, 2.5);
-
-    // Cauda
-    g.fillStyle(0x8d6e63, 1);
-    g.fillEllipse(48, 10, 26, 70);
-
-    this.add(g);
+    const sprite = this.scene.add.sprite(0, 0, 'sandy-boss');
+    sprite.setDisplaySize(134, 110);
+    this.add(sprite);
 
     const label = this.scene.add
       .text(0, -100, 'SANDY', {
