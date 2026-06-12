@@ -512,8 +512,8 @@ function buildFooterHTML(): string {
 
 function buildModalHTML(): string {
   const rows: [string, string][] = [
-    ['Mover', 'A · D'], ['Pular', 'ESPAÇO'], ['Agachar', 'S'],
-    ['Dash', 'SHIFT'], ['Atirar', 'MOUSE 1'], ['Habilidade especial', 'CTRL + M1 ou M2'],
+    ['Mover', 'A · D'], ['Pular', 'ESPAÇO · W'], ['Agachar', 'S'],
+    ['Atirar (laser)', 'MOUSE 1'], ['Investida / Dash', 'SHIFT'], ['Habilidade Suprema', 'Q'],
   ];
   return `
   <div id="howto-modal" style="position:fixed;inset:0;background:rgba(2,6,16,0.85);backdrop-filter:blur(10px);z-index:10000;display:none;align-items:center;justify-content:center;">
