@@ -73,7 +73,7 @@ export class Patrick extends BaseBoss {
 
   buildVisual(): void {
     const sprite = this.scene.add.sprite(0, 0, 'patrick-boss');
-    sprite.setDisplaySize(120, 120);
+    sprite.setDisplaySize(103, 120);
     this.add(sprite);
 
     const label = this.scene.add

@@ -89,7 +89,7 @@ export class LulaMolusco extends BaseBoss {
 
   buildVisual(): void {
     const sprite = this.scene.add.sprite(0, 0, 'lula-boss');
-    sprite.setDisplaySize(84, 130);
+    sprite.setDisplaySize(97, 130);
     this.add(sprite);
 
     const label = this.scene.add
