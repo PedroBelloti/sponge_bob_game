@@ -30,8 +30,8 @@ export class SkillSelectScene extends Phaser.Scene {
   // Cards
   private leftCardBox!: Phaser.GameObjects.Graphics;
   private leftCardContainer!: Phaser.GameObjects.Container;
-  private rightCardBox!: Phaser.GameObjects.Graphics;
-  private rightCardContainer!: Phaser.GameObjects.Container;
+  private rightCardBox?: Phaser.GameObjects.Graphics;       // ausente se Bob não ajuda
+  private rightCardContainer?: Phaser.GameObjects.Container;
 
   // Typewriter
   private currentDialogIndex = 0;
@@ -60,6 +60,12 @@ export class SkillSelectScene extends Phaser.Scene {
 
     // ── Ambient background ──
     this.add.rectangle(W / 2, H / 2, W, H, COLORS.bg);
+
+    // Chegada do Holandês Voador como fundo + scrim escuro p/ legibilidade
+    if (this.textures.exists('skill-bg')) {
+      this.add.image(W / 2, H / 2, 'skill-bg');
+      this.add.rectangle(W / 2, H / 2, W, H, 0x05142e, 0.55);
+    }
 
     // Split background visual theme
     // Left side green gradient (Holandês)
@@ -122,9 +128,15 @@ export class SkillSelectScene extends Phaser.Scene {
         text: '"Plankton, eu perdoo você pelo que houve. Juntos podemos vencer a ameaça final. Não exijo almas ou pactos, apenas sua amizade e o poder da ONDA DE SURF!"',
       });
     } else {
+      // Easter egg: o Bob até apareceu querendo ajudar, mas Plankton foi
+      // maldoso demais — nem o coração mais bondoso da Fenda topou a aliança.
+      this.dialogLines.push({
+        speaker: 'BOB ESPONJA',
+        text: '"Eu... eu queria poder te ajudar, Plankton. De verdade."',
+      });
       this.dialogLines.push({
         speaker: 'SISTEMA',
-        text: 'Bob Esponja observa Plankton com desconfiança e recusa-se a ajudá-lo devido ao seu histórico de egoísmo e maldade. O pacto com o Holandês Voador é compulsório.',
+        text: 'Mas, lembrando de tudo que Plankton fez pelo caminho, Bob baixou os olhos. Era maldade demais — até para o coração mais bondoso da Fenda do Biquíni. Ele se afastou em silêncio, e só restou o Pacto.',
       });
     }
 
@@ -169,33 +181,33 @@ export class SkillSelectScene extends Phaser.Scene {
     const cardH = 260;
     const cardY = 250;
 
-    // LEFT CARD — Holandês
+    // Imagem ilustrada de fundo do card + scrim p/ o texto continuar legível
+    const cardBg = (key: string): Phaser.GameObjects.GameObject[] => {
+      if (!this.textures.exists(key)) return [];
+      const img = this.add.image(0, 0, key).setDisplaySize(cardW - 8, cardH - 8);
+      const scrim = this.add.rectangle(0, 0, cardW - 8, cardH - 8, 0x05142e, 0.5);
+      return [img, scrim];
+    };
+
+    // LEFT CARD — Holandês (centralizado quando é a única opção)
+    const leftX = this.isBobAvailable ? W / 2 - 240 : W / 2;
     this.leftCardBox = this.add.graphics();
     this.drawCard(this.leftCardBox, 0, 0, cardW, cardH, true, false, 0x6fff8a);
 
     const leftTitle = this.add.text(0, -90, 'HOLANDÊS VOADOR', display(18, '#6fff8a')).setOrigin(0.5);
     const leftSkill = this.add.text(0, -55, '▲ ÂNCORAS AMALDIÇOADAS', mono(12, COLORS_CSS.gold)).setOrigin(0.5);
-    
     const leftDesc = this.add.text(0, -10, 'Suprema ofensiva devastadora.\nChove 4 âncoras gigantes do céu\ncausando dano massivo no impacto.', {
-      ...mono(11, '#e8f4ff'),
-      align: 'center',
-      lineSpacing: 4,
+      ...mono(11, '#e8f4ff'), align: 'center', lineSpacing: 4,
     }).setOrigin(0.5);
-
     const leftWarning = this.add.text(0, 50, '◆ CAMINHO EGOÍSTA / FANTOCHE', mono(11, COLORS_CSS.orange)).setOrigin(0.5);
     const leftAction = this.add.text(0, 95, '[ AVALIAR PACTO ]', display(13, '#6fff8a')).setOrigin(0.5);
 
-    this.leftCardContainer = this.add.container(W / 2 - 240, cardY, [
-      this.leftCardBox,
-      leftTitle,
-      leftSkill,
-      leftDesc,
-      leftWarning,
-      leftAction,
+    this.leftCardContainer = this.add.container(leftX, cardY, [
+      this.leftCardBox, ...cardBg('card-holandes'),
+      leftTitle, leftSkill, leftDesc, leftWarning, leftAction,
     ]);
     this.leftCardContainer.setVisible(false);
 
-    // Make Left Card interactive via mouse
     this.leftCardBox.setInteractive(new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, cardW, cardH), Phaser.Geom.Rectangle.Contains);
     this.leftCardBox.on('pointerdown', () => {
       if (!this.inChoiceMode || this.confirmed) return;
@@ -209,49 +221,39 @@ export class SkillSelectScene extends Phaser.Scene {
       this.updateCardVisuals();
     });
 
-    // RIGHT CARD — Bob Esponja
+    // RIGHT CARD — Bob só EXISTE se ele ofereceu ajuda.
+    // Easter egg: se não, o card nem aparece (a recusa fica só no diálogo).
+    if (!this.isBobAvailable) return;
+
     this.rightCardBox = this.add.graphics();
-    this.drawCard(this.rightCardBox, 0, 0, cardW, cardH, false, !this.isBobAvailable, 0xffd400);
+    this.drawCard(this.rightCardBox, 0, 0, cardW, cardH, false, false, 0xffd400);
 
-    const rightTitle = this.add.text(0, -90, 'BOB ESPONJA', display(18, this.isBobAvailable ? '#ffd400' : '#55667d')).setOrigin(0.5);
-    const rightSkill = this.add.text(0, -55, '▲ ONDA DE SURF', mono(12, this.isBobAvailable ? COLORS_CSS.cyan : '#55667d')).setOrigin(0.5);
-    
-    const rightDesc = this.add.text(0, -10, this.isBobAvailable 
-      ? 'Bob surge com sua prancha e\numa onda gigante varre a arena,\ndestruindo projéteis e causando dano.'
-      : 'Bob não confia em você.\nSua ajuda está bloqueada para\nesta rodada.', {
-      ...mono(11, this.isBobAvailable ? '#e8f4ff' : '#55667d'),
-      align: 'center',
-      lineSpacing: 4,
+    const rightTitle = this.add.text(0, -90, 'BOB ESPONJA', display(18, '#ffd400')).setOrigin(0.5);
+    const rightSkill = this.add.text(0, -55, '▲ ONDA DE SURF', mono(12, COLORS_CSS.cyan)).setOrigin(0.5);
+    const rightDesc = this.add.text(0, -10, 'Bob surge com sua prancha e\numa onda gigante varre a arena,\ndestruindo projéteis e causando dano.', {
+      ...mono(11, '#e8f4ff'), align: 'center', lineSpacing: 4,
     }).setOrigin(0.5);
-
-    const rightWarning = this.add.text(0, 50, this.isBobAvailable ? '◆ CAMINHO EMPÁTICO / REDENÇÃO' : '◆ ALIANÇA INDISPONÍVEL', mono(11, this.isBobAvailable ? COLORS_CSS.success : '#55667d')).setOrigin(0.5);
-    const rightAction = this.add.text(0, 95, this.isBobAvailable ? '[ ACEITAR ALIANÇA ]' : '[ REJEITADO ]', display(13, this.isBobAvailable ? '#ffd400' : '#55667d')).setOrigin(0.5);
+    const rightWarning = this.add.text(0, 50, '◆ CAMINHO EMPÁTICO / REDENÇÃO', mono(11, COLORS_CSS.success)).setOrigin(0.5);
+    const rightAction = this.add.text(0, 95, '[ ACEITAR ALIANÇA ]', display(13, '#ffd400')).setOrigin(0.5);
 
     this.rightCardContainer = this.add.container(W / 2 + 240, cardY, [
-      this.rightCardBox,
-      rightTitle,
-      rightSkill,
-      rightDesc,
-      rightWarning,
-      rightAction,
+      this.rightCardBox, ...cardBg('card-bob'),
+      rightTitle, rightSkill, rightDesc, rightWarning, rightAction,
     ]);
     this.rightCardContainer.setVisible(false);
 
-    // Make Right Card interactive via mouse (only if unlocked)
-    if (this.isBobAvailable) {
-      this.rightCardBox.setInteractive(new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, cardW, cardH), Phaser.Geom.Rectangle.Contains);
-      this.rightCardBox.on('pointerdown', () => {
-        if (!this.inChoiceMode || this.confirmed) return;
-        this.selected = 'bob';
-        this.updateCardVisuals();
-        this.confirmSelection();
-      });
-      this.rightCardBox.on('pointerover', () => {
-        if (!this.inChoiceMode || this.confirmed) return;
-        this.selected = 'bob';
-        this.updateCardVisuals();
-      });
-    }
+    this.rightCardBox.setInteractive(new Phaser.Geom.Rectangle(-cardW / 2, -cardH / 2, cardW, cardH), Phaser.Geom.Rectangle.Contains);
+    this.rightCardBox.on('pointerdown', () => {
+      if (!this.inChoiceMode || this.confirmed) return;
+      this.selected = 'bob';
+      this.updateCardVisuals();
+      this.confirmSelection();
+    });
+    this.rightCardBox.on('pointerover', () => {
+      if (!this.inChoiceMode || this.confirmed) return;
+      this.selected = 'bob';
+      this.updateCardVisuals();
+    });
   }
 
   private drawCard(
@@ -338,7 +340,12 @@ export class SkillSelectScene extends Phaser.Scene {
     this.continuePrompt.setVisible(false);
 
     this.leftCardContainer.setVisible(true);
-    this.rightCardContainer.setVisible(true);
+    this.rightCardContainer?.setVisible(true);
+
+    // Sem o Bob, ajusta o texto: é só confirmar o Pacto
+    if (!this.isBobAvailable) {
+      this.dialogText.setText('Sem aliados, resta o Pacto. Confirme para selá-lo:');
+    }
 
     this.updateCardVisuals();
   }
@@ -350,9 +357,6 @@ export class SkillSelectScene extends Phaser.Scene {
     const isLeft = this.selected === 'holandes';
 
     this.drawCard(this.leftCardBox, 0, 0, cardW, cardH, isLeft, false, 0x6fff8a);
-    this.drawCard(this.rightCardBox, 0, 0, cardW, cardH, !isLeft, !this.isBobAvailable, 0xffd400);
-
-    // Apply scale tween for active card
     this.tweens.add({
       targets: this.leftCardContainer,
       scale: isLeft ? 1.04 : 1,
@@ -360,12 +364,15 @@ export class SkillSelectScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
     });
 
-    this.tweens.add({
-      targets: this.rightCardContainer,
-      scale: (!isLeft && this.isBobAvailable) ? 1.04 : 1,
-      duration: 150,
-      ease: 'Quad.easeOut',
-    });
+    if (this.rightCardBox && this.rightCardContainer) {
+      this.drawCard(this.rightCardBox, 0, 0, cardW, cardH, !isLeft, false, 0xffd400);
+      this.tweens.add({
+        targets: this.rightCardContainer,
+        scale: !isLeft ? 1.04 : 1,
+        duration: 150,
+        ease: 'Quad.easeOut',
+      });
+    }
   }
 
   private confirmSelection(): void {

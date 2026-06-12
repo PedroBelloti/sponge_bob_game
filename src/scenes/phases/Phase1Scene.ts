@@ -11,10 +11,11 @@ import type { AttackPalette } from '../../config/theme';
 export class Phase1Scene extends BossPhaseScene {
   private patrick!: Patrick;
 
-  // Tufos de algodão (obstáculo da arena — GDD)
+  // Tufos de algodão — barragem rápida de várias direções (principalmente vertical)
   private cottonPool: Phaser.GameObjects.Container[] = [];
   private cottonActive: Set<Phaser.GameObjects.Container> = new Set();
   private cottonTimer: Phaser.Time.TimerEvent | null = null;
+  private patrickFinal = false;
 
   constructor() {
     super({ key: 'Phase1Scene' });
@@ -88,8 +89,9 @@ export class Phase1Scene extends BossPhaseScene {
     this.cottonPool = [];
     this.cottonActive = new Set();
     this.cottonTimer = null;
+    this.patrickFinal = false;
     this.setupCottonPool();
-    this.scheduleCottonSpawn();
+    this.scheduleCottonSpawn(850);
   }
 
   protected onArenaUpdate(_time: number): void {
@@ -97,8 +99,9 @@ export class Phase1Scene extends BossPhaseScene {
   }
 
   protected onBossFinalPhaseHook(): void {
-    // GDD: tufos de algodão dobram a frequência na fase final
-    this.scheduleCottonSpawn(CONSTANTS.COTTON_SPAWN_INTERVAL / 2);
+    // Fase final: algodões ainda mais frequentes e rápidos
+    this.patrickFinal = true;
+    this.scheduleCottonSpawn(450);
 
     const { width, height } = this.scale;
     const msg = this.add
@@ -175,7 +178,7 @@ export class Phase1Scene extends BossPhaseScene {
   // ── Tufos de algodão ──────────────────────────────────────────
 
   private setupCottonPool(): void {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 24; i++) {
       const c = this.add.container(-100, -100).setDepth(3);
       c.add(this.add.image(0, 0, 'cotton'));
       c.setVisible(false);
@@ -195,18 +198,41 @@ export class Phase1Scene extends BossPhaseScene {
 
   private spawnCotton(): void {
     if (this.isGameOver) return;
+    // Vários por vez, de direções variadas (mais ainda na fase final)
+    const burst = this.patrickFinal ? 3 : 2;
+    for (let i = 0; i < burst; i++) this.launchOneCotton();
+  }
+
+  private launchOneCotton(): void {
     const inactive = this.cottonPool.find((c) => !this.cottonActive.has(c));
     if (!inactive) return;
-    const fromLeft = Math.random() < 0.5;
-    const { width } = this.scale;
-    const x = fromLeft ? -20 : width + 20;
-    const y = Phaser.Math.Between(150, 550);
-    inactive.setPosition(x, y).setVisible(true);
+    const { width, height } = this.scale;
+
+    // Direção: principalmente VERTICAL (de cima), às vezes outras
+    const r = Math.random();
+    let sx: number, sy: number, ex: number, ey: number;
+    if (r < 0.6) {            // de cima ↓
+      sx = Phaser.Math.Between(40, width - 40); sy = -30;
+      ex = sx + Phaser.Math.Between(-70, 70);   ey = height + 60;
+    } else if (r < 0.78) {    // de baixo ↑
+      sx = Phaser.Math.Between(40, width - 40); sy = height + 30;
+      ex = sx + Phaser.Math.Between(-70, 70);   ey = -60;
+    } else if (r < 0.89) {    // da esquerda →
+      sx = -30; sy = Phaser.Math.Between(80, height - 80);
+      ex = width + 60; ey = sy + Phaser.Math.Between(-70, 70);
+    } else {                  // da direita ←
+      sx = width + 30; sy = Phaser.Math.Between(80, height - 80);
+      ex = -60; ey = sy + Phaser.Math.Between(-70, 70);
+    }
+
+    inactive.setPosition(sx, sy).setVisible(true);
     this.cottonActive.add(inactive);
+    const dist = Math.hypot(ex - sx, ey - sy);
+    const speed = this.patrickFinal ? 640 : 480; // px/s — bem mais rápido que antes
     this.tweens.add({
       targets: inactive,
-      x: fromLeft ? width + 60 : -60,
-      duration: ((width + 80) / 120) * 1000,
+      x: ex, y: ey,
+      duration: (dist / speed) * 1000,
       ease: 'Linear',
       onComplete: () => {
         inactive.setVisible(false).setPosition(-100, -100);

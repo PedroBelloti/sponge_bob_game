@@ -18,7 +18,6 @@ export class SandyBochechas extends BaseBoss {
   // Sequência de lasers: telegraph é desenhado pelo próprio boss;
   // os tiros prontos ficam na fila até o m1 do frame seguinte coletar
   private queuedShots: ProjectileData[] = [];
-  private sequenceActive: boolean = false;
 
   // Painel de controle: bônus de velocidade enquanto verde (GDD)
   private boostActive: boolean = false;
@@ -82,27 +81,6 @@ export class SandyBochechas extends BaseBoss {
     return CONSTANTS.SANDY_LASER_CHARGE_MS;
   }
 
-  private gapMs(): number {
-    if (this.mood === 'respeitosa') return CONSTANTS.SANDY_LASER_GAP_MS * 1.25;
-    if (this.mood === 'competitiva') return CONSTANTS.SANDY_LASER_GAP_MS * 0.75;
-    return CONSTANTS.SANDY_LASER_GAP_MS;
-  }
-
-  private m1CooldownNow(): number {
-    let cd = this.config.m1Cooldown;
-    if (this.mood === 'respeitosa') cd *= 1.3;   // janelas de punição generosas
-    if (this.mood === 'competitiva') cd *= 0.7;  // cadência aumentada
-    if (this.boostActive) cd *= 0.65;            // painel verde
-    return cd;
-  }
-
-  private laserSpeed(): number {
-    let speed = this.config.projectileSpeed;
-    if (this.isFinalPhase) speed *= this.config.finalPhaseSpeedMultiplier;
-    if (this.mood === 'competitiva') speed *= 1.1;
-    if (this.boostActive) speed *= 1.2;
-    return speed;
-  }
 
   // ── BaseBoss impl ─────────────────────────────────────────────
 
@@ -129,129 +107,109 @@ export class SandyBochechas extends BaseBoss {
     this.add(label);
   }
 
-  m1(time: number, _targetX?: number, _targetY?: number): ProjectileData[] {
-    // Sempre entrega o que os telegraphs deixaram pronto
-    const ready = this.queuedShots.splice(0);
+  m1(_time: number): ProjectileData[] {
+    // A cadência e o teto de 4 lasers ativos são geridos pela cena
+    // (fireLaserNearPlayer). Aqui só entregamos os tiros já carregados.
+    return this.queuedShots.splice(0);
+  }
 
-    if (!this.sequenceActive && time - this.lastM1Time >= this.m1CooldownNow()) {
-      this.lastM1Time = time;
-      this.startLaserSequence();
+  private laserSpeedNow(): number {
+    let speed = 980; // mais rápido que antes (era 700)
+    if (this.isFinalPhase) speed *= this.config.finalPhaseSpeedMultiplier;
+    if (this.mood === 'competitiva') speed *= 1.1;
+    if (this.boostActive) speed *= 1.2;
+    return speed;
+  }
+
+  /**
+   * Dispara UM laser de uma borda aleatória — horizontal OU vertical —
+   * mirando perto do Plankton. Rápido, com telegrafo curto. A cena controla a
+   * cadência e o limite de 4 ativos.
+   */
+  fireLaserNearPlayer(px: number, py: number): void {
+    if (this.isDefeated) return;
+    const W = CONSTANTS.GAME_WIDTH, H = CONSTANTS.GAME_HEIGHT;
+    const speed = this.laserSpeedNow();
+    const charge = this.chargeMs() * 0.6; // telegrafo curto = laser rápido
+    const edge = Phaser.Math.Between(0, 3); // 0 dir, 1 esq, 2 topo, 3 base
+
+    let origin: { x: number; y: number };
+    let vel: { x: number; y: number };
+    let rotation = 0;
+    // IMPORTANTE: nascer DENTRO da margem de cull (±20px) ou o tiro é removido
+    // no mesmo frame. Nasce na própria borda da tela e viaja para dentro.
+    if (edge <= 1) {
+      const ly = Phaser.Math.Clamp(py + Phaser.Math.Between(-70, 70), 40, H - 40);
+      origin = { x: edge === 0 ? W - 6 : 6, y: ly };
+      vel = { x: edge === 0 ? -speed : speed, y: 0 };
+    } else {
+      const lx = Phaser.Math.Clamp(px + Phaser.Math.Between(-70, 70), 40, W - 40);
+      origin = { x: lx, y: edge === 2 ? 6 : H - 6 };
+      vel = { x: 0, y: edge === 2 ? speed : -speed };
+      rotation = Math.PI / 2;
     }
-
-    return ready;
+    this.chargeLaser(origin, vel, rotation, charge);
   }
 
-  // GDD: quatro lasers horizontais em sequência, cada um em altura
-  // ligeiramente diferente, com carregamento visível antes de disparar
-  private startLaserSequence(): void {
-    this.sequenceActive = true;
-
-    const groundY = this.y + 70; // pés da Sandy
-    const heights = [40, 105, 170, 235].map(
-      (h) => groundY - h + Phaser.Math.Between(-12, 12),
-    );
-
-    const charge = this.chargeMs();
-    const gap = this.gapMs();
-
-    heights.forEach((laserY, i) => {
-      this.scene.time.delayedCall(i * gap, () => {
-        if (this.isDefeated) return;
-        this.chargeLaser(laserY, charge);
-      });
-    });
-
-    const total = (heights.length - 1) * gap + charge + 200;
-    this.scene.time.delayedCall(total, () => {
-      this.sequenceActive = false;
-    });
-  }
-
-  private chargeLaser(laserY: number, charge: number): void {
-    // Linha de aviso tracejada atravessando a arena — carregamento visível
-    // (GDD). Tracejado + pulso de alpha lê melhor sobre o cenário foto.
-    const warn = this.scene.add.graphics().setDepth(4).setAlpha(0.2);
+  private chargeLaser(
+    origin: { x: number; y: number },
+    vel: { x: number; y: number },
+    rotation: number,
+    charge: number,
+  ): void {
+    const W = CONSTANTS.GAME_WIDTH, H = CONSTANTS.GAME_HEIGHT;
+    const horizontal = vel.y === 0;
+    const warn = this.scene.add.graphics().setDepth(4).setAlpha(0.25);
     warn.lineStyle(3, 0xff1744, 1);
-    const DASH = 18;
-    const GAP_PX = 12;
-    for (let x = 0; x < CONSTANTS.GAME_WIDTH; x += DASH + GAP_PX) {
-      warn.lineBetween(x, laserY, Math.min(x + DASH, CONSTANTS.GAME_WIDTH), laserY);
+    const DASH = 18, GAP_PX = 12;
+    if (horizontal) {
+      for (let x = 0; x < W; x += DASH + GAP_PX) {
+        warn.lineBetween(x, origin.y, Math.min(x + DASH, W), origin.y);
+      }
+    } else {
+      for (let y = 0; y < H; y += DASH + GAP_PX) {
+        warn.lineBetween(origin.x, y, origin.x, Math.min(y + DASH, H));
+      }
     }
-    // Marcador na borda de origem: o tiro nasce na Sandy e viaja para a esquerda
-    const marker = this.scene.add
-      .text(this.x - 52, laserY, '◀', {
-        fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-        fontSize: '14px',
-        color: '#ff1744',
-      })
-      .setOrigin(0.5)
-      .setDepth(4);
-    this.scene.tweens.add({
-      targets: [warn, marker],
-      alpha: 0.6,
-      duration: charge / 4,
-      yoyo: true,
-      repeat: 1,
-    });
+    this.scene.tweens.add({ targets: warn, alpha: 0.7, duration: charge / 4, yoyo: true, repeat: 1 });
 
     this.scene.time.delayedCall(charge, () => {
       warn.destroy();
-      marker.destroy();
       if (this.isDefeated) return;
-
-      // Clarão localizado no cano — flash de tela inteira piscava demais
-      // com 4 lasers em sequência
-      const muzzle = this.scene.add
-        .ellipse(this.x - 60, laserY, 36, 20, 0xff5252, 0.85)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(5);
-      this.scene.tweens.add({
-        targets: muzzle,
-        scaleX: 1.8,
-        scaleY: 1.4,
-        alpha: 0,
-        duration: 130,
-        ease: 'Quad.easeOut',
-        onComplete: () => muzzle.destroy(),
-      });
-
       this.queuedShots.push({
-        x: this.x - 60,
-        y: laserY,
-        velocityX: -this.laserSpeed(),
-        velocityY: 0,
+        x: origin.x, y: origin.y,
+        velocityX: vel.x, velocityY: vel.y,
         damage: this.config.projectileDamage,
+        rotation,
       });
     });
   }
 
-  // Granadas de gelo — só na fase final (GDD)
-  m2(time: number, targetX?: number): ProjectileData[] {
-    if (!this.isFinalPhase) return [];
+  // Bolas de gelo: jogadas SEMPRE, em posições aleatórias da arena. A cena
+  // detecta o pouso (chão ou plataforma) e cria a poça de gelo que escorrega.
+  m2(time: number): ProjectileData[] {
+    const cd = this.isFinalPhase
+      ? CONSTANTS.ICE_GRENADE_COOLDOWN_MS * 0.55
+      : CONSTANTS.ICE_GRENADE_COOLDOWN_MS;
     if (this.lastGrenadeTime === 0) {
       this.lastGrenadeTime = time;
       return [];
     }
-    if (time - this.lastGrenadeTime < CONSTANTS.ICE_GRENADE_COOLDOWN_MS) return [];
+    if (time - this.lastGrenadeTime < cd) return [];
     this.lastGrenadeTime = time;
 
-    const dx = (targetX ?? 0) - this.x;
-    const dir = dx < 0 ? -1 : 1;
-    const dist = Math.min(Math.abs(dx), 900);
-
-    // Dois arcos: um no jogador, outro um pouco mais curto
-    return [1.0, 0.7].map((frac) => ({
-      x: this.x,
-      y: this.y - 60,
-      velocityX: dir * (dist * frac) * 0.55,
-      velocityY: -430,
+    // Arco em direção a um X aleatório da arena
+    return [{
+      x: this.x, y: this.y - 60,
+      velocityX: Phaser.Math.Between(-420, 420),
+      velocityY: -440,
       damage: CONSTANTS.ICE_GRENADE_DAMAGE,
       textureKey: 'ice-grenade',
       gravity: true,
       effect: 'freeze' as const,
-      lifespanMs: 2600,
-      trailTint: 0xb2ebf2, // rastro de neve, não o vermelho dos lasers
-    }));
+      lifespanMs: 5000,
+      trailTint: 0xb2ebf2,
+    }];
   }
 
   /**

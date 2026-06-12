@@ -136,9 +136,9 @@ export class LulaMolusco extends BaseBoss {
     const speed = this.config.projectileSpeed *
       (this.isFinalPhase ? this.config.finalPhaseSpeedMultiplier : 1);
 
-    // Desestabilizado fora da fúria: rajada mais fraca (3 notas em vez de 5)
+    // Desestabilizado fora da fúria: rajada ainda mais enxuta
     const count = this.mood === 'desestabilizado' && !this.inFury(time)
-      ? 3
+      ? 1
       : CONSTANTS.LULA_NOTES_PER_BURST;
 
     // Notas enfileiradas atrás do bocal — viajam como uma linha (GDD)

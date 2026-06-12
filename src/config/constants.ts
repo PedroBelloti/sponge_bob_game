@@ -12,11 +12,11 @@ export const CONSTANTS = {
   SANDY_FINAL_PHASE: 0.30,
   BOB_FINAL_PHASE: 0.25,
   FINAL_BOSS_FINAL_PHASE: 0.40,
-  PATRICK_HP: 600,
-  LULA_HP: 500,
-  SANDY_HP: 700,
-  BOB_HP: 900,
-  FINAL_BOSS_HP: 1200,
+  PATRICK_HP: 1100,
+  LULA_HP: 1300,
+  SANDY_HP: 1500,
+  BOB_HP: 1900,
+  FINAL_BOSS_HP: 2400,
   PRIME_HP_MULTIPLIER: 1.5,
   PRIME_SPEED_MULTIPLIER: 1.4,
   PRIME_DAMAGE_MULTIPLIER: 1.3,
@@ -26,7 +26,7 @@ export const CONSTANTS = {
   COTTON_SLOW_DURATION: 2000,
   SPOTLIGHT_PRECISION_DURATION: 3000,
   PANEL_SPEED_BOOST_DURATION: 5000,
-  VIGA_FALL_INTERVAL: 4000,
+  VIGA_FALL_INTERVAL: 6000,          // tetos caem menos
   CURRENT_CHANGE_INTERVAL: 15000,
   VULNERABILITY_WINDOW: 2000,
 
@@ -40,11 +40,11 @@ export const CONSTANTS = {
 
   // Lula Molusco
   LULA_NOTE_DAMAGE: 1,
-  LULA_NOTE_SPEED: 430,
-  LULA_NOTES_PER_BURST: 5,           // GDD: cinco notas em linha reta
+  LULA_NOTE_SPEED: 620,              // notas maiores e mais rápidas
+  LULA_NOTES_PER_BURST: 2,           // menos notas por tiro
   LULA_STATUE_HP: 50,                // 2 acertos de laser destroem
   LULA_STATUE_COUNTDOWN_MS: 3000,    // GDD: explode após 3 segundos
-  LULA_STATUE_COOLDOWN_MS: 9000,
+  LULA_STATUE_COOLDOWN_MS: 4500,     // mais frequentes
   LULA_STATUE_EXPLOSION_RADIUS: 160,
   LULA_STATUE_DAMAGE: 1,
   SPOTLIGHT_WIDTH: 110,
@@ -81,10 +81,10 @@ export const CONSTANTS = {
   ANCHOR_COUNT: 4,
   ANCHOR_WARNING_MS: 600,       // aviso no chão antes da queda
   ANCHOR_STAGGER_MS: 140,       // intervalo entre âncoras (padrão diagonal)
-  ANCHOR_DAMAGE_DIRECT: 100,    // dano massivo no impacto direto
-  ANCHOR_DAMAGE_SPLASH: 40,     // dano indireto reduzido significativamente (GDD)
-  ANCHOR_DIRECT_RADIUS: 90,
-  ANCHOR_SPLASH_RADIUS: 200,
+  ANCHOR_DAMAGE_DIRECT: 135,    // dano massivo no impacto direto
+  ANCHOR_DAMAGE_SPLASH: 60,     // dano indireto
+  ANCHOR_DIRECT_RADIUS: 115,
+  ANCHOR_SPLASH_RADIUS: 270,
 
   // Game feel — pulo (compartilhado por todos os jogáveis)
   COYOTE_TIME_MS: 100,        // janela pós-borda em que o pulo ainda vale
@@ -96,7 +96,7 @@ export const CONSTANTS = {
   PLANKTON_JUMP_VELOCITY: 480,
   PLANKTON_DASH_SPEED: 520,
   PLANKTON_DASH_DURATION: 180,
-  PLANKTON_DASH_COOLDOWN: 700,
+  PLANKTON_DASH_COOLDOWN: 350,       // dash mais frequente
   PLANKTON_LASER_DAMAGE: 25,
   PLANKTON_LASER_SPEED: 600,
   PLANKTON_LASER_FIRE_INTERVAL: 350,

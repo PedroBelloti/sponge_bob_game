@@ -66,6 +66,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('patrick-boss', 'assets/patrick.png');
     this.load.image('sandy-boss',   'assets/sandy.png');
     this.load.image('lula-boss',    'assets/lula.png');
+    this.load.image('mermaid-man-boss',  'assets/mermaid-man.png');
+    this.load.image('barnacle-boy-boss', 'assets/barnacle-boy.png');
+    this.load.image('bob-bubble',        'assets/bob-bubble.png');
 
     // ── Cenários reais (1280x720, recortados de docs/cenario_*.jpeg) ──
     this.load.image('bg-prologo', 'assets/bg-prologo.jpg');
@@ -74,6 +77,16 @@ export class BootScene extends Phaser.Scene {
     this.load.image('bg-sandy',   'assets/bg-sandy.jpg');
     this.load.image('bg-bob',     'assets/bg-bob.jpg');
     this.load.image('bob-surf',   'assets/surf-bg.png');
+
+    // ── Fundos de cutscene/finais/escolha ──
+    this.load.image('end-redencao', 'assets/end-redencao.jpg');
+    this.load.image('end-traido',   'assets/end-traido.jpg');
+    this.load.image('end-fantoche', 'assets/end-fantoche.jpg');
+    this.load.image('cut-prologo',  'assets/cut-prologo.jpg');
+    this.load.image('cut-patrick',  'assets/cut-patrick.jpg');
+    this.load.image('skill-bg',     'assets/skill-bg.jpg');
+    this.load.image('card-holandes', 'assets/card-holandes.jpg');
+    this.load.image('card-bob',      'assets/card-bob.jpg');
   }
 
   // ── Tela de carregamento — estética "diário de mergulho" do menu ──

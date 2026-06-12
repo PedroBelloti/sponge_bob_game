@@ -11,10 +11,20 @@ import {
   mono,
 } from '../config/theme';
 
+/** Fala narrativa (interlúdio da Karen/Narrador antes do confronto). */
+export interface NarrativeLine {
+  speaker: string;
+  text: string;
+}
+
 export interface DialogConfig {
   bossId: BossId;
   speakerName: string;
   lines: string[];
+  /** Interlúdio narrativo exibido ANTES das falas do boss (cada um c/ falante). */
+  intro?: NarrativeLine[];
+  /** Imagem de cutscene (chave de textura) exibida atrás do painel. */
+  background?: string;
   choiceA: string;
   choiceB: string;
   nextScene: string;
@@ -32,11 +42,13 @@ export class DialogScene extends Phaser.Scene {
   private cfg!: DialogConfig;
 
   // Typewriter state
+  private segments: NarrativeLine[] = []; // interlúdio + falas do boss, unificados
   private currentLine = 0;
   private charIndex = 0;
   private fullText = '';
   private typewriterTimer: Phaser.Time.TimerEvent | null = null;
   private lineText!: Phaser.GameObjects.Text;
+  private speakerText!: Phaser.GameObjects.Text;
   private continuePrompt!: Phaser.GameObjects.Text;
 
   // Painel animável (abre/fecha como unidade)
@@ -66,6 +78,11 @@ export class DialogScene extends Phaser.Scene {
 
   init(data: DialogConfig): void {
     this.cfg = data;
+    // Interlúdio narrativo (cada fala c/ seu falante) + falas do boss
+    this.segments = [
+      ...(data.intro ?? []),
+      ...data.lines.map((text) => ({ speaker: data.speakerName, text })),
+    ];
     this.currentLine = 0;
     this.charIndex = 0;
     this.fullText = '';
@@ -80,9 +97,15 @@ export class DialogScene extends Phaser.Scene {
     const W = CONSTANTS.GAME_WIDTH;
     const H = CONSTANTS.GAME_HEIGHT;
 
-    // Overlay esmaece em vez de cortar — a arena segue legível atrás
+    // Cutscene (se houver): cobre a arena atrás do painel
+    const hasBg = !!this.cfg.background && this.textures.exists(this.cfg.background);
+    if (hasBg) {
+      this.add.image(W / 2, H / 2, this.cfg.background!).setDepth(-1);
+    }
+
+    // Overlay esmaece em vez de cortar — mais leve quando há cutscene
     this.overlay = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0).setDepth(0);
-    this.tweens.add({ targets: this.overlay, fillAlpha: 0.7, duration: 240 });
+    this.tweens.add({ targets: this.overlay, fillAlpha: hasBg ? 0.35 : 0.7, duration: 240 });
 
     // Tudo do painel vive num Container — abre/fecha como uma unidade
     this.panelRoot = this.add.container(0, 0).setDepth(1);
@@ -104,8 +127,8 @@ export class DialogScene extends Phaser.Scene {
     const tag = this.add.text(leftEdge, topEdge - 4, '◆ TRANSMISSÃO', caption(10, COLORS_CSS.cyan));
     this.panelRoot.add(tag);
 
-    const speaker = this.add.text(leftEdge, topEdge + 14, this.cfg.speakerName, display(20));
-    this.panelRoot.add(speaker);
+    this.speakerText = this.add.text(leftEdge, topEdge + 14, this.cfg.speakerName, display(20));
+    this.panelRoot.add(this.speakerText);
 
     // Line text
     this.lineText = this.add.text(leftEdge, topEdge + 50, '', {
@@ -150,7 +173,7 @@ export class DialogScene extends Phaser.Scene {
     this.leftKey  = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
     this.rightKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
 
-    if (this.cfg.lines.length > 0) {
+    if (this.segments.length > 0) {
       this.showLine(0);
     } else {
       this.enterChoiceMode();
@@ -159,13 +182,24 @@ export class DialogScene extends Phaser.Scene {
 
   // ── Typewriter ────────────────────────────────────────────────
 
+  /** Cor do nome conforme o falante (narrativa lê melhor distinguindo vozes). */
+  private speakerColor(name: string): string {
+    const n = name.toUpperCase();
+    if (n.includes('KAREN')) return COLORS_CSS.cyan;
+    if (n.includes('PLANKTON')) return COLORS_CSS.success;
+    if (n.includes('NARRADOR')) return COLORS_CSS.textDim;
+    return COLORS_CSS.gold; // bosses e demais
+  }
+
   private showLine(index: number): void {
     if (this.typewriterTimer) {
       this.typewriterTimer.remove();
       this.typewriterTimer = null;
     }
     this.currentLine = index;
-    this.fullText = this.cfg.lines[index];
+    const seg = this.segments[index];
+    this.fullText = seg.text;
+    this.speakerText.setText(seg.speaker).setColor(this.speakerColor(seg.speaker));
     this.charIndex = 0;
     this.lineText.setText('');
     this.continuePrompt.setVisible(false);
@@ -196,7 +230,7 @@ export class DialogScene extends Phaser.Scene {
 
     // Second press: advance to next line or choices
     const next = this.currentLine + 1;
-    if (next < this.cfg.lines.length) {
+    if (next < this.segments.length) {
       this.showLine(next);
     } else {
       this.enterChoiceMode();

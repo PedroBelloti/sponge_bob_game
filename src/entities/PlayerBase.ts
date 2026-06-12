@@ -74,6 +74,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     (this.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(true);
+    this.applyBodySize(false); // hitbox um pouco menor que o sprite
 
     this.ensureProjectileTexture();
     this.projectilePool = scene.physics.add.group({ maxSize: 15 });
@@ -264,6 +265,21 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     });
   }
 
+  // Hitbox um pouco menor que o sprite (largura/altura), alinhada aos pés
+  private static readonly HB_W = 0.74;
+  private static readonly HB_H = 0.86;
+
+  /** Aplica o corpo de física reduzido, centrado em X e alinhado aos pés. */
+  protected applyBodySize(crouching: boolean): void {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    const fw = this.frame.realWidth;
+    const fh = this.frame.realHeight;
+    const bw = fw * PlayerBase.HB_W;
+    const bh = fh * (crouching ? 0.5 : PlayerBase.HB_H);
+    body.setSize(bw, bh, false);
+    body.setOffset((fw - bw) / 2, fh - bh); // base do corpo nos pés
+  }
+
   private handleCrouch(wasd: WASDKeys): void {
     const shouldCrouch = wasd.S.isDown;
     if (shouldCrouch === this.isCrouching) return;
@@ -271,18 +287,9 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     this.isCrouching = shouldCrouch;
     const body = this.body as Phaser.Physics.Arcade.Body;
     const feetY = body.bottom;
-    const fw = this.frame.realWidth;
-    const fh = this.frame.realHeight;
 
-    if (this.isCrouching) {
-      this.setScale(1, 0.5);
-      body.setSize(fw, fh * 0.5, false);
-      body.setOffset(0, fh * 0.5);
-    } else {
-      this.setScale(1, 1);
-      body.setSize(fw, fh, false);
-      body.setOffset(0, 0);
-    }
+    this.setScale(1, this.isCrouching ? 0.5 : 1);
+    this.applyBodySize(this.isCrouching);
     this.y = feetY - this.height / 2;
   }
 
@@ -410,7 +417,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     return true;
   }
 
-  applySlowEffect(duration: number): void {
+  applySlowEffect(duration: number, multiplier: number = 0.4): void {
     if (this.slowTimer) {
       this.slowTimer.remove();
       this.slowTimer = null;
@@ -422,7 +429,7 @@ export abstract class PlayerBase extends Phaser.Physics.Arcade.Sprite {
     }
 
     this.isSlowed = true;
-    this.slowMultiplier = 0.4;
+    this.slowMultiplier = multiplier;
 
     this.activeSyncTween = this.scene.tweens.add({
       targets: this,

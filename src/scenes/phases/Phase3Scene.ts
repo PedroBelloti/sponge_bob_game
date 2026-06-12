@@ -38,6 +38,11 @@ export class Phase3Scene extends BossPhaseScene {
   // Robôs de Teste
   private robots: TestRobot[] = [];
 
+  // Lasers (cadência + teto geridos aqui) e poças de gelo escorregadias
+  private lastLaserFire = 0;
+  private laserRefilling = true; // só reabastece quando ≥2 lasers acabaram
+  private icePatches: { x: number; y: number; w: number; expireAt: number; visual: Phaser.GameObjects.Ellipse }[] = [];
+
   constructor() {
     super({ key: 'Phase3Scene' });
   }
@@ -107,6 +112,9 @@ export class Phase3Scene extends BossPhaseScene {
 
   protected onArenaCreate(): void {
     this.robots = [];
+    this.lastLaserFire = 0;
+    this.laserRefilling = true;
+    this.icePatches = [];
     this.panelHp = CONSTANTS.PANEL_HP;
     this.panelDestroyed = false;
     this.schedulePanelCycle();
@@ -118,6 +126,81 @@ export class Phase3Scene extends BossPhaseScene {
 
     // Sandy pede um novo Robô de Teste quando o cooldown vence
     if (this.sandy.tryRequestRobot(time)) this.spawnRobot(time);
+
+    // Lasers: enche até o teto (3) e só volta a spawnar quando ≥2 acabaram.
+    // Cadência um pouco mais lenta que antes.
+    const CAP = 3;
+    const active = this.countActiveSandyLasers();
+    if (active <= CAP - 2) this.laserRefilling = true;  // 2 acabaram → reabastece
+    if (active >= CAP) this.laserRefilling = false;       // cheio → para
+    const interval = this.sandy.isBoosted() ? 480 : 640;
+    if (this.laserRefilling && time - this.lastLaserFire >= interval) {
+      this.lastLaserFire = time;
+      this.sandy.fireLaserNearPlayer(this.plankton.x, this.plankton.y);
+    }
+
+    // Bolas de gelo: ao pousar (chão ou plataforma) viram poças que escorregam
+    this.updateIceGrenades();
+    this.updateIcePatches(time);
+  }
+
+  private countActiveSandyLasers(): number {
+    let n = 0;
+    this.bossProjectilePool.getChildren().forEach((o) => {
+      const p = o as Phaser.Physics.Arcade.Sprite;
+      if (p.active && p.texture.key === 'sandy-laser') n++;
+    });
+    return n;
+  }
+
+  private updateIceGrenades(): void {
+    const groundTop = CONSTANTS.GAME_HEIGHT - 50;
+    this.bossProjectilePool.getChildren().forEach((o) => {
+      const p = o as Phaser.Physics.Arcade.Sprite;
+      if (!p.active || p.texture.key !== 'ice-grenade') return;
+      const body = p.body as Phaser.Physics.Arcade.Body;
+      if (body.velocity.y <= 0) return; // só conta como pouso ao descer
+
+      let landY: number | null = p.y >= groundTop ? groundTop : null;
+      if (landY === null) {
+        this.platforms.getChildren().forEach((pl) => {
+          const b = (pl as Phaser.Physics.Arcade.Sprite).body as Phaser.Physics.Arcade.StaticBody;
+          if (p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.top + 22) landY = b.top;
+        });
+      }
+      if (landY !== null) {
+        this.deactivateBossProjectile(p);
+        this.spawnIcePatch(p.x, landY);
+      }
+    });
+  }
+
+  private spawnIcePatch(x: number, y: number): void {
+    impactBurst(this, x, y, ATTACK_PALETTES.ice, { particles: 10, scale: 1.2 });
+    const w = 130;
+    const visual = this.add
+      .ellipse(x, y - 2, w, 20, 0xb2ebf2, 0.5)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(2);
+    this.tweens.add({ targets: visual, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });
+    this.icePatches.push({ x, y, w, expireAt: this.time.now + 5000, visual });
+  }
+
+  private updateIcePatches(time: number): void {
+    this.icePatches = this.icePatches.filter((patch) => {
+      if (time >= patch.expireAt) {
+        this.tweens.killTweensOf(patch.visual);
+        this.tweens.add({ targets: patch.visual, alpha: 0, duration: 300, onComplete: () => patch.visual.destroy() });
+        return false;
+      }
+      // Pisando na poça → escorrega (fica mais lento) por 5s
+      const feet = this.plankton.getBounds().bottom;
+      if (this.plankton.x >= patch.x - patch.w / 2 && this.plankton.x <= patch.x + patch.w / 2 &&
+          Math.abs(feet - patch.y) < 42) {
+        this.plankton.applySlowEffect(280);
+      }
+      return true;
+    });
   }
 
   protected onBossFinalPhaseHook(): void {

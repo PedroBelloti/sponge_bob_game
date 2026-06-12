@@ -36,6 +36,7 @@ export abstract class BossPhaseScene extends Phaser.Scene {
   protected platforms!: Phaser.Physics.Arcade.StaticGroup;
   protected isGameOver: boolean = false;
   protected skillCharge!: SkillCharge;
+  protected autoCastSupreme = false; // boss final ativa a suprema sozinho
 
   private wasd!: WASDKeys;
   private spaceKey!: Phaser.Input.Keyboard.Key;
@@ -164,8 +165,10 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     shots.forEach((data) => this.spawnBossProjectile(data));
     this.cullBossProjectiles(time);
 
-    // Habilidade Suprema
-    if (Phaser.Input.Keyboard.JustDown(this.skillKey) && this.skillCharge.consume()) {
+    // Habilidade Suprema — manual [Q] ou auto (boss final ativa sozinho ao encher)
+    const fireSupreme = Phaser.Input.Keyboard.JustDown(this.skillKey)
+      || (this.autoCastSupreme && this.skillCharge.isReady());
+    if (fireSupreme && this.skillCharge.consume()) {
       const skill = GameState.getInstance().getData().skillUnlocked;
       if (skill === 'bob') {
         this.castSurfWave();
@@ -203,7 +206,7 @@ export abstract class BossPhaseScene extends Phaser.Scene {
         const waveRect = new Phaser.Geom.Rectangle(waveX - 100, waveY - 340, 200, 340);
         if (Phaser.Geom.Intersects.RectangleToRectangle(waveRect, bossBounds)) {
           this.surfWaveHitBoss = true;
-          this.boss.receiveDamage(150); // Onda gigante causa 150 de dano!
+          this.boss.receiveDamage(210); // Onda gigante — dano alto
           impactBurst(this, this.boss.x, this.boss.y, { core: 0xffffff, mid: 0x4dd0e1, halo: 0xffd400 }, {
             particles: 25,
             scale: 2.0,
@@ -216,7 +219,7 @@ export abstract class BossPhaseScene extends Phaser.Scene {
       this.bossProjectilePool.getChildren().forEach((obj) => {
         const proj = obj as Phaser.Physics.Arcade.Sprite;
         if (proj.active) {
-          const waveRect = new Phaser.Geom.Rectangle(waveX - 100, waveY - 340, 200, 340);
+          const waveRect = new Phaser.Geom.Rectangle(waveX - 150, waveY - 470, 300, 470);
           if (Phaser.Geom.Intersects.RectangleToRectangle(waveRect, proj.getBounds())) {
             this.deactivateBossProjectile(proj);
             impactBurst(this, proj.x, proj.y, ATTACK_PALETTES.bob);
@@ -349,6 +352,7 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     p.setData('damage', data.damage);
     p.setData('effect', data.effect ?? null);
     p.setData('trailTint', data.trailTint ?? this.getBossPalette().mid);
+    p.setData('homeUntil', data.homingMs ? this.time.now + data.homingMs : 0);
     const body = p.body as Phaser.Physics.Arcade.Body;
     body.enable = true; // pool reusa sprites desativados — reabilita a física
     body.reset(data.x, data.y);
@@ -444,18 +448,31 @@ export abstract class BossPhaseScene extends Phaser.Scene {
   }
 
   // Laser do Plankton → boss (geométrico — Container não tem physics body)
+  /**
+   * Alvos atingíveis pelo laser do Plankton. Default: o boss único. Cenas com
+   * múltiplos bosses (ex.: FinalScene) sobrescrevem para alvos independentes.
+   */
+  protected getBossHitTargets(): { rect: Phaser.Geom.Rectangle; hit: (dmg: number) => void }[] {
+    if (this.boss.isBossDefeated()) return [];
+    return [{ rect: this.boss.getHitBounds(), hit: (d) => this.boss.receiveDamage(d) }];
+  }
+
   private checkLaserBossOverlap(): void {
-    if (this.boss.isBossDefeated()) return;
-    const bossRect = this.boss.getHitBounds();
+    const targets = this.getBossHitTargets();
+    if (targets.length === 0) return;
     this.plankton.getProjectileGroup().getChildren().forEach((obj) => {
       const laser = obj as Phaser.Physics.Arcade.Sprite;
       if (!laser.active) return;
-      if (Phaser.Geom.Intersects.RectangleToRectangle(laser.getBounds(), bossRect)) {
-        impactBurst(this, laser.x, laser.y, ATTACK_PALETTES.plankton);
-        laser.setActive(false).setVisible(false);
-        (laser.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-        this.boss.receiveDamage(CONSTANTS.PLANKTON_LASER_DAMAGE);
-        this.skillCharge.addFromDamage(CONSTANTS.PLANKTON_LASER_DAMAGE);
+      const lb = laser.getBounds();
+      for (const t of targets) {
+        if (Phaser.Geom.Intersects.RectangleToRectangle(lb, t.rect)) {
+          impactBurst(this, laser.x, laser.y, ATTACK_PALETTES.plankton);
+          laser.setActive(false).setVisible(false);
+          (laser.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+          t.hit(CONSTANTS.PLANKTON_LASER_DAMAGE);
+          this.skillCharge.addFromDamage(CONSTANTS.PLANKTON_LASER_DAMAGE);
+          break;
+        }
       }
     });
   }
@@ -467,7 +484,7 @@ export abstract class BossPhaseScene extends Phaser.Scene {
   private static readonly SKILL_BAR_W = 220;
   private static readonly SKILL_BAR_H = 14;
 
-  private buildBossHpBar(width: number): void {
+  protected buildBossHpBar(width: number): void {
     const barW = BossPhaseScene.BOSS_BAR_W;
     const barH = BossPhaseScene.BOSS_BAR_H;
     const cx = width / 2;
@@ -726,9 +743,9 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     this.tweens.add({ targets: flash, alpha: 0, duration: 700, onComplete: () => flash.destroy() });
     this.cameras.main.shake(200, 0.005);
 
-    // Padrão diagonal cobrindo ~2/3 da tela, sempre sobre o lado do boss
-    const start = width / 3 + 60;
-    const span = width - start - 80;
+    // Padrão diagonal cobrindo bem mais da tela
+    const start = width / 5 + 30;
+    const span = width - start - 70;
     for (let i = 0; i < CONSTANTS.ANCHOR_COUNT; i++) {
       const x = start + (span / (CONSTANTS.ANCHOR_COUNT - 1)) * i;
       this.time.delayedCall(i * CONSTANTS.ANCHOR_STAGGER_MS, () => this.dropAnchor(x, groundY));
@@ -850,8 +867,8 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     this.tweens.add({ targets: flash, alpha: 0, duration: 600, onComplete: () => flash.destroy() });
     this.cameras.main.shake(300, 0.005);
 
-    // Create wave container (positioned offscreen initially)
-    const container = this.add.container(-250, groundY).setDepth(10);
+    // Create wave container (positioned offscreen initially) — onda maior
+    const container = this.add.container(-250, groundY).setDepth(10).setScale(1.35);
 
     // 1. Trailing Wave Graphics
     const waveGraphics = this.add.graphics();

@@ -28,6 +28,7 @@ export interface ProjectileData {
   bounce?: boolean;      // quica nas paredes (notas do Lula na fase final)
   lifespanMs?: number;   // TTL para projéteis que não saem da tela
   gravity?: boolean;     // trajetória em arco (granadas de gelo da Sandy)
+  homingMs?: number;     // segue o player por N ms, depois segue reto (bolhas do Mexilhãozinho)
   effect?: 'freeze';     // efeito extra ao atingir o jogador
   trailTint?: number;    // cor do rastro de partículas (default: paleta do boss)
   rotation?: number;     // rotação visual do sprite (notas do Lula)

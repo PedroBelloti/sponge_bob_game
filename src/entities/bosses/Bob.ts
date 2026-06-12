@@ -136,7 +136,8 @@ export class Bob extends BaseBoss {
       ease: 'Sine.easeInOut',
     });
 
-    const throwBurger = (delay: number) => {
+    // Pequenas bolhas de sabão, em leque, miradas perto do Plankton
+    const throwBubbles = (delay: number) => {
       this.scene.time.delayedCall(delay, () => {
         if (this.isDefeated) return;
 
@@ -144,36 +145,34 @@ export class Bob extends BaseBoss {
         const ty = targetY ?? this.y - 50;
         const startX = this.x - 40;
         const startY = this.y - 60;
-        const angle = Phaser.Math.Angle.Between(startX, startY, tx, ty);
+        const base = Phaser.Math.Angle.Between(startX, startY, tx, ty);
 
-        // Muzzle flash localizado no arremesso
         const muzzle = this.scene.add
-          .ellipse(startX, startY, 24, 24, 0xffb300, 0.8)
+          .ellipse(startX, startY, 20, 20, 0x81d4fa, 0.8)
           .setBlendMode(Phaser.BlendModes.ADD)
           .setDepth(5);
         this.scene.tweens.add({
-          targets: muzzle,
-          scale: 1.6,
-          alpha: 0,
-          duration: 120,
+          targets: muzzle, scale: 1.6, alpha: 0, duration: 120,
           onComplete: () => muzzle.destroy(),
         });
 
-        this.queuedShots.push({
-          x: startX,
-          y: startY,
-          velocityX: Math.cos(angle) * this.hamburgerSpeed(),
-          velocityY: Math.sin(angle) * this.hamburgerSpeed(),
-          damage: this.config.projectileDamage,
-          textureKey: 'hamburger',
-          trailTint: 0xffb300,
+        [-0.16, 0, 0.16].forEach((off) => {
+          const a = base + off;
+          this.queuedShots.push({
+            x: startX, y: startY,
+            velocityX: Math.cos(a) * this.hamburgerSpeed(),
+            velocityY: Math.sin(a) * this.hamburgerSpeed(),
+            damage: this.config.projectileDamage,
+            textureKey: 'bob-bubble',
+            trailTint: 0x81d4fa,
+          });
         });
       });
     };
 
-    // Sequência de 2 hambúrgueres (GDD)
-    throwBurger(250);
-    throwBurger(650);
+    // Duas salvas de bolhas
+    throwBubbles(250);
+    throwBubbles(650);
 
     this.scene.time.delayedCall(900, () => {
       this.sequenceActive = false;
@@ -257,7 +256,7 @@ export class Bob extends BaseBoss {
       velocityX: Math.cos(angle) * (this.hamburgerSpeed() * 1.25),
       velocityY: Math.sin(angle) * (this.hamburgerSpeed() * 1.25),
       damage: this.config.projectileDamage,
-      textureKey: 'bob-projectile', // Bolha azul de projétil do Bob
+      textureKey: 'bob-bubble', // bolha de sabão devolvida
       trailTint: 0x29b6f6,
     });
   }

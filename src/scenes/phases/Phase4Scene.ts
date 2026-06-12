@@ -1,7 +1,6 @@
 import * as Phaser from 'phaser';
 import { CONSTANTS } from '../../config/constants';
 import { Bob } from '../../entities/bosses/Bob';
-import { Gary } from '../../entities/bosses/Gary';
 import type { BaseBoss } from '../../entities/bosses/BaseBoss';
 import type { DialogConfig } from '../DialogScene';
 import { DIALOG_BOB } from '../../data/dialogs';
@@ -18,16 +17,15 @@ import type { AttackPalette } from '../../config/theme';
 
 export class Phase4Scene extends BossPhaseScene {
   private bob!: Bob;
-  private gary!: Gary;
-  private slimes!: Phaser.Physics.Arcade.Group;
 
   // Vigas do teto (GDD)
   private vigasGroup!: Phaser.Physics.Arcade.Group;
   private vigaTimer: Phaser.Time.TimerEvent | null = null;
   private currentVigaInterval: number = CONSTANTS.VIGA_FALL_INTERVAL;
 
-  // Gary roll state
-  private lastGaryRollTime: number = 0;
+  // Onda de águas-vivas (substitui o Gary) — choque sem dano que trava o player
+  private jellyfish!: Phaser.Physics.Arcade.Group;
+  private lastJellyWaveTime: number = 0;
 
   constructor() {
     super({ key: 'Phase4Scene' });
@@ -87,7 +85,7 @@ export class Phase4Scene extends BossPhaseScene {
   }
 
   protected getBossProjectileTextureKey(): string {
-    return 'hamburger';
+    return 'bob-bubble';
   }
 
   protected getBossBarColor(): number {
@@ -107,14 +105,11 @@ export class Phase4Scene extends BossPhaseScene {
   }
 
   protected onArenaCreate(): void {
-    this.lastGaryRollTime = 0;
+    this.lastJellyWaveTime = 0;
     this.currentVigaInterval = CONSTANTS.VIGA_FALL_INTERVAL;
 
-    // Grupo de slimes (gosma do Gary)
-    this.slimes = this.physics.add.group();
-
-    // Gary lesma
-    this.gary = new Gary(this, 0, 0, this.slimes);
+    // Grupo de águas-vivas (onda que dá choque)
+    this.jellyfish = this.physics.add.group();
 
     // Grupo de vigas caindo
     this.vigasGroup = this.physics.add.group();
@@ -138,15 +133,6 @@ export class Phase4Scene extends BossPhaseScene {
       }
     });
 
-    // Colisão Gary -> Plankton
-    this.physics.add.overlap(this.plankton, this.gary, () => {
-      if (this.gary.isRollingActive() && this.plankton.receiveDamage(1)) {
-        const pushDir = Math.sign(this.plankton.x - this.gary.x) || 1;
-        (this.plankton.body as Phaser.Physics.Arcade.Body).setVelocity(pushDir * 420, -180);
-        this.updateHUD();
-      }
-    });
-
     // Agendar queda de vigas
     this.scheduleVigaTimer();
 
@@ -155,9 +141,6 @@ export class Phase4Scene extends BossPhaseScene {
         this.physics.world.setBounds(0, 0, CONSTANTS.GAME_WIDTH, CONSTANTS.GAME_HEIGHT);
       }
       this.vigaTimer?.remove();
-      if (this.gary) {
-        this.gary.stopAttack();
-      }
     });
   }
 
@@ -168,42 +151,65 @@ export class Phase4Scene extends BossPhaseScene {
       this.updateHUD();
     }
 
-    // Verificar se jogador está pisando no rastro de gosma (torna escorregadio)
-    let onSlime = false;
-    this.slimes.getChildren().forEach((s) => {
-      const slime = s as Phaser.Physics.Arcade.Sprite;
-      if (
-        slime.active &&
-        slime.visible &&
-        Phaser.Geom.Intersects.RectangleToRectangle(this.plankton.getBounds(), slime.getBounds())
-      ) {
-        onSlime = true;
-      }
-    });
-    this.plankton.setSlippery(onSlime);
+    // Onda de águas-vivas: movimento + choque ao tocar o Plankton
+    this.updateJellyfish();
 
-    // Atualizar Gary
-    if (this.gary.active) {
-      this.gary.update();
-    }
-
-    // Spawna Gary abaixo de 50% HP (GDD)
+    // Lança ondas abaixo de 50% HP do Bob (no lugar do Gary)
     const hpPct = this.bob.getHpPercent();
-    if (hpPct <= 0.5 && !this.gary.isRollingActive()) {
+    if (hpPct <= 0.5) {
       const isDetermined = this.bob.getMood() === 'determinado';
-      const cooldown = isDetermined ? 9000 : 14000;
-      if (this.lastGaryRollTime === 0 || time - this.lastGaryRollTime >= cooldown) {
-        this.lastGaryRollTime = time;
-        const fromLeft = this.plankton.x > this.scale.width / 2;
-        const speed = isDetermined ? 450 : 300;
-        this.gary.startAttack(fromLeft, speed);
+      const cooldown = isDetermined ? 4500 : 6500;
+      if (this.lastJellyWaveTime === 0 || time - this.lastJellyWaveTime >= cooldown) {
+        this.lastJellyWaveTime = time;
+        this.spawnJellyfishWave(Math.random() < 0.5);
       }
     }
   }
 
+  // ── Onda de águas-vivas (substitui o Gary) ────────────────────
+
+  private spawnJellyfishWave(fromLeft: boolean): void {
+    const { width } = this.scale;
+    const speed = (this.bob.getMood() === 'determinado' ? 230 : 185);
+    const startX = fromLeft ? -40 : width + 40;
+    const vx = fromLeft ? speed : -speed;
+
+    // Linha vertical de águas-vivas com 2 lacunas seguidas p/ desviar
+    const ys = [120, 200, 280, 360, 440, 520, 600];
+    const gap = Phaser.Math.Between(0, ys.length - 2);
+    ys.forEach((y, i) => {
+      if (i === gap || i === gap + 1) return; // brecha para passar
+      const jelly = this.jellyfish.create(startX, y, 'jellyfish') as Phaser.Physics.Arcade.Sprite;
+      jelly.setDepth(4);
+      const body = jelly.body as Phaser.Physics.Arcade.Body;
+      body.setAllowGravity(false);
+      body.setVelocityX(vx);
+    });
+  }
+
+  private updateJellyfish(): void {
+    const { width } = this.scale;
+    this.jellyfish.getChildren().forEach((o) => {
+      const j = o as Phaser.Physics.Arcade.Sprite;
+      if (!j.active) return;
+      if (j.x < -60 || j.x > width + 60) { j.destroy(); return; }
+      if (Phaser.Geom.Intersects.RectangleToRectangle(j.getBounds(), this.plankton.getBounds())) {
+        this.shockPlayer(j.x, j.y);
+        j.destroy();
+      }
+    });
+  }
+
+  /** Choque: trava o Plankton (sem dano). No ar ele despenca; sobre buraco, morre. */
+  private shockPlayer(x: number, y: number): void {
+    this.plankton.applyFreezeEffect(800);
+    impactBurst(this, x, y, { core: 0xffffff, mid: 0xff80ab, halo: 0xf06292 }, { particles: 8, scale: 1 });
+    this.cameras.main.shake(120, 0.004);
+  }
+
   protected onBossFinalPhaseHook(): void {
-    // Fase final abaixo de 25% HP: vigas caem mais rápido (GDD)
-    this.currentVigaInterval = 2000;
+    // Fase final abaixo de 25% HP: vigas caem um pouco mais rápido
+    this.currentVigaInterval = 3500;
     this.scheduleVigaTimer();
 
     const { width, height } = this.scale;
@@ -397,18 +403,31 @@ export class Phase4Scene extends BossPhaseScene {
       g.destroy();
     }
 
-    // Viga caindo
+    // Viga caindo — tábua de madeira
     if (!this.textures.exists('viga')) {
       const w = 160;
       const h = 24;
       const g = this.add.graphics();
-      g.fillStyle(0x78909c, 1);
+      // corpo de madeira
+      g.fillStyle(0x8d5a2b, 1);
       g.fillRect(0, 0, w, h);
-      g.fillStyle(0x8d6e63, 0.7);
-      g.fillRect(15, 4, 30, 6);
-      g.fillRect(100, 14, 40, 6);
-      g.fillStyle(0xffb300, 0.95); // Linha ambar topo
-      g.fillRect(0, 0, w, 3);
+      // brilho de luz no topo
+      g.fillStyle(0xb07a45, 0.6);
+      g.fillRect(0, 1, w, 2);
+      // veios do grão (linhas escuras horizontais)
+      g.fillStyle(0x5d3a1a, 0.8);
+      g.fillRect(0, 6, w, 2);
+      g.fillRect(0, 13, w, 2);
+      g.fillStyle(0x5d3a1a, 0.5);
+      g.fillRect(0, 19, w, 1.5);
+      // nós da madeira (knots)
+      g.fillStyle(0x4e2e15, 0.9);
+      g.fillCircle(40, 12, 4);
+      g.fillCircle(112, 9, 3.5);
+      // tampas das pontas, mais escuras (corte da tábua)
+      g.fillStyle(0x6b4423, 1);
+      g.fillRect(0, 0, 5, h);
+      g.fillRect(w - 5, 0, 5, h);
       g.generateTexture('viga', w, h);
       g.destroy();
     }
@@ -416,6 +435,24 @@ export class Phase4Scene extends BossPhaseScene {
     // Projétil returned (bolha azul)
     if (!this.textures.exists('bob-projectile')) {
       makeGlowTexture(this, 'bob-projectile', ATTACK_PALETTES.bob, 12);
+    }
+
+    // Água-viva: sino rosa translúcido + tentáculos
+    if (!this.textures.exists('jellyfish')) {
+      const g = this.add.graphics();
+      g.fillStyle(0xf06292, 0.35); g.fillEllipse(22, 18, 42, 30); // halo
+      g.fillStyle(0xff80ab, 0.7);  g.fillEllipse(22, 17, 34, 24); // sino
+      g.fillStyle(0xf48fb1, 0.9);  g.fillEllipse(22, 15, 26, 18);
+      g.fillStyle(0xffffff, 0.55); g.fillEllipse(15, 11, 9, 5);   // brilho
+      g.lineStyle(3, 0xf06292, 0.8);
+      [10, 17, 24, 31].forEach((tx, i) => {
+        g.beginPath();
+        g.moveTo(tx, 27);
+        g.lineTo(tx + (i % 2 ? 5 : -5), 47);
+        g.strokePath();
+      });
+      g.generateTexture('jellyfish', 44, 50);
+      g.destroy();
     }
   }
 }

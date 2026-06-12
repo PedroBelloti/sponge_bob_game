@@ -6,6 +6,7 @@ import type { DialogConfig } from '../DialogScene';
 import { BossPhaseScene } from './BossPhaseScene';
 import {
   ATTACK_PALETTES,
+  COLORS,
   COLORS_CSS,
   caption,
   display,
@@ -24,12 +25,20 @@ export class FinalScene extends BossPhaseScene {
   private currentParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private currentLabel: Phaser.GameObjects.Text | null = null;
 
-  // Whirlpool (M2) state
+  // Whirlpool (M2) state — sucção contínua que decai aos poucos após o uso
   private lastWhirlpoolTime: number = 0;
-  private isWhirlpoolActive: boolean = false;
+  private whirlpoolSpinning: boolean = false; // fase de sucção máxima (giro)
+  private whirlpoolStrength: number = 0;       // 0..1; decai gradual após o giro
+  private prevTime: number = 0;                // p/ dt do decaimento
   private whirlpoolCenter = { x: 640, y: 340 };
-  private warningCircle: Phaser.GameObjects.Graphics | null = null;
   private whirlpoolParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private whirlpoolSwirl: Phaser.GameObjects.Graphics | null = null;
+  private static readonly WHIRLPOOL_WINDUP_MS = 2000; // telegrafo: param de atirar + giro
+
+  // Barras de HP dos dois bosses (Homem Sereia, Mexilhãozinho)
+  private barFills: Phaser.GameObjects.Rectangle[] = [];
+  private barChips: Phaser.GameObjects.Rectangle[] = [];
+  private static readonly DUO_BAR_W = 300;
 
   constructor() {
     super({ key: 'FinalScene' });
@@ -47,10 +56,18 @@ export class FinalScene extends BossPhaseScene {
       .text(16, 16, '◆ ARENA OCEÂNICA', caption(12, COLORS_CSS.text))
       .setShadow(1, 1, '#000000', 2);
 
-    // Chão de rochas profundas
+    // Limites do mundo estendidos p/ queda livre nos buracos
+    this.physics.world.setBounds(0, 0, width, height + 100);
+
+    // Chão de rochas profundas com DOIS buracos (como na fase do Bob)
     this.ground = this.physics.add.staticGroup();
-    const ground = this.ground.create(width / 2, height - 25, 'final-ground') as Phaser.Physics.Arcade.Sprite;
-    ground.refreshBody();
+    const groundSeg = (cx: number, w: number) => {
+      const g = this.ground.create(cx, height - 25, 'final-ground') as Phaser.Physics.Arcade.Sprite;
+      g.setDisplaySize(w, 50).refreshBody();
+    };
+    groundSeg(200, 400);  // esquerda  [0..400]
+    groundSeg(720, 360);  // centro    [540..900]  → buraco 1: [400..540]
+    groundSeg(1160, 240); // direita   [1040..1280] → buraco 2: [900..1040]
 
     // Plataformas bioluminescentes
     this.platforms = this.physics.add.staticGroup();
@@ -76,11 +93,75 @@ export class FinalScene extends BossPhaseScene {
     return this.finalBoss;
   }
 
+  // Laser preciso → atinge o combatente específico (não dano em área)
+  protected override getBossHitTargets() {
+    if (this.finalBoss.isBossDefeated()) return [];
+    return this.finalBoss.getAliveTargets().map((t) => ({
+      rect: t.rect,
+      hit: (d: number) => this.finalBoss.hitCombatant(t.key, d),
+    }));
+  }
+
+  // Duas barras de HP (uma por boss), em vez da barra única padrão
+  protected override buildBossHpBar(width: number): void {
+    const barW = FinalScene.DUO_BAR_W;
+    const barH = 14;
+    const y = 40;
+    const positions = [width / 2 - barW - 24, width / 2 + 24]; // esquerda, direita
+    this.finalBoss.getBarStates().forEach((s, i) => {
+      const left = positions[i];
+      this.add.text(left + barW / 2, y - 14, s.name, display(12, COLORS_CSS.text))
+        .setOrigin(0.5, 1).setDepth(5);
+      const track = this.add.graphics().setDepth(5);
+      track.fillStyle(COLORS.panelDark, 0.85);
+      track.fillRoundedRect(left, y - barH / 2, barW, barH, barH / 2);
+      track.lineStyle(1, COLORS.cyan, 0.3);
+      track.strokeRoundedRect(left, y - barH / 2, barW, barH, barH / 2);
+      this.barChips[i] = this.add.rectangle(left + 2, y, barW - 4, barH - 6, 0xffffff, 0.5)
+        .setOrigin(0, 0.5).setDepth(6);
+      this.barFills[i] = this.add.rectangle(left + 2, y, barW - 4, barH - 6, s.color)
+        .setOrigin(0, 0.5).setDepth(7);
+    });
+  }
+
+  private updateBossBars(): void {
+    const fullW = FinalScene.DUO_BAR_W - 4;
+    this.finalBoss.getBarStates().forEach((s, i) => {
+      const fill = this.barFills[i];
+      const chip = this.barChips[i];
+      if (!fill || !chip) return;
+      fill.displayWidth = fullW * s.hpPct;
+      if (!s.alive) fill.setFillStyle(0x44566a); // derrotado: cinza
+      chip.displayWidth = Phaser.Math.Linear(chip.displayWidth, fullW * s.hpPct, 0.08);
+    });
+  }
+
+  /** Sucção do redemoinho: forte, resistível remando (nunca vencível). */
+  private applyWhirlpoolSuction(body: Phaser.Physics.Arcade.Body, strength: number): void {
+    const dx = this.whirlpoolCenter.x - this.plankton.x;
+    const dy = this.whirlpoolCenter.y - this.plankton.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ux = dx / dist, uy = dy / dist;
+    const basePull = (this.finalBoss.getIsPrime() ? 520 : 420) * strength; // px/s p/ centro
+    const radial = body.velocity.x * ux + body.velocity.y * uy; // + se já indo p/ centro
+    const tx = body.velocity.x - radial * ux; // componente tangencial preservada
+    const ty = body.velocity.y - radial * uy;
+    const minPull = basePull * 0.25;
+    // remar p/ fora (radial<0) reduz a sucção, mas nunca abaixo do mínimo
+    const netRadial = Math.max(minPull, basePull + Math.min(0, radial));
+    body.setVelocity(tx + ux * netRadial, ty + uy * netRadial);
+  }
+
   // Sem diálogo interativo antes da luta final (GDD)
   protected getDialog(): DialogConfig {
     return {
       bossId: 'final',
       speakerName: 'HOMEM SEREIA',
+      intro: [
+        { speaker: 'NARRADOR', text: 'Os heróis da Fenda do Biquíni bloquearam o caminho.' },
+        { speaker: 'KAREN', text: '"Independente do que acontecer agora... foi uma jornada e tanto para uma criatura do seu tamanho."' },
+        { speaker: 'PLANKTON', text: '"Cala a boca, Karen."' },
+      ],
       lines: [
         'PLANKTON! Sua vilania termina aqui no fundo do oceano!',
         'Prepare-se para enfrentar o poder da justiça!',
@@ -113,8 +194,10 @@ export class FinalScene extends BossPhaseScene {
   }
 
   protected onArenaCreate(): void {
+    this.autoCastSupreme = true; // a suprema ativa sozinha ao encher
     this.lastWhirlpoolTime = this.time.now;
-    this.isWhirlpoolActive = false;
+    this.whirlpoolSpinning = false;
+    this.whirlpoolStrength = 0;
 
     // Ciclo de mudança das correntes marinhas a cada 15 segundos (GDD)
     this.currentDirection = 'none';
@@ -140,10 +223,20 @@ export class FinalScene extends BossPhaseScene {
       this.currentTimer?.remove();
       this.whirlpoolParticles?.destroy();
       this.currentParticles?.destroy();
+      this.whirlpoolSwirl?.destroy();
+      if (this.physics?.world) {
+        this.physics.world.setBounds(0, 0, CONSTANTS.GAME_WIDTH, CONSTANTS.GAME_HEIGHT);
+      }
     });
   }
 
   protected onArenaUpdate(time: number): void {
+    // 0. Cair num buraco = morte (como na fase do Bob)
+    if (this.plankton.y > CONSTANTS.GAME_HEIGHT + 30 && !this.isGameOver) {
+      this.plankton.receiveDamage(CONSTANTS.PLANKTON_MAX_HP);
+      this.updateHUD();
+    }
+
     // 1. Aplicar força das correntes marinhas sobre Plankton
     const body = this.plankton.body as Phaser.Physics.Arcade.Body;
     if (this.currentDirection === 'left') {
@@ -152,16 +245,18 @@ export class FinalScene extends BossPhaseScene {
       body.setVelocityX(body.velocity.x + 70);
     }
 
-    // 2. Trajetória guiada das bolhas de Mexilhãozinho
+    // 2. Bolhas de Mexilhãozinho: teleguiadas por 3s (homeUntil), depois reto
     this.bossProjectilePool.getChildren().forEach((obj) => {
       const p = obj as Phaser.Physics.Arcade.Sprite;
       if (p.active && p.visible && p.texture.key === 'barnacle-bubble') {
+        const homeUntil = (p.getData('homeUntil') as number) ?? 0;
+        if (time >= homeUntil) return; // janela de perseguição acabou → linha reta
         const pBody = p.body as Phaser.Physics.Arcade.Body;
         const angle = Phaser.Math.Angle.Between(p.x, p.y, this.plankton.x, this.plankton.y);
         const speed = 250 * (this.finalBoss.getIsPrime() ? CONSTANTS.PRIME_SPEED_MULTIPLIER : 1.0);
         const targetVx = Math.cos(angle) * speed;
         const targetVy = Math.sin(angle) * speed;
-        
+
         // Suave ajuste de rumo (4% por frame)
         pBody.setVelocity(
           Phaser.Math.Linear(pBody.velocity.x, targetVx, 0.04),
@@ -170,18 +265,24 @@ export class FinalScene extends BossPhaseScene {
       }
     });
 
-    // 3. Mecânica de sucção do Redemoinho duplo (M2)
-    if (this.isWhirlpoolActive) {
-      const angle = Phaser.Math.Angle.Between(this.plankton.x, this.plankton.y, this.whirlpoolCenter.x, this.whirlpoolCenter.y);
-      const pullForce = this.finalBoss.getIsPrime() ? 150 : 100;
-      body.setVelocity(
-        body.velocity.x + Math.cos(angle) * pullForce * 0.1,
-        body.velocity.y + Math.sin(angle) * pullForce * 0.1
-      );
+    // 3. Sucção do redemoinho: forte durante o giro, depois decai aos poucos
+    const dt = this.prevTime ? Math.min((time - this.prevTime) / 1000, 0.05) : 0;
+    this.prevTime = time;
+    if (this.whirlpoolStrength > 0) {
+      this.applyWhirlpoolSuction(body, this.whirlpoolStrength);
+      this.whirlpoolParticles?.setAlpha(Math.min(1, this.whirlpoolStrength + 0.15));
+      if (!this.whirlpoolSpinning) {
+        this.whirlpoolStrength = Math.max(0, this.whirlpoolStrength - dt / 2.5); // ~2.5s até sumir
+        if (this.whirlpoolStrength === 0) this.whirlpoolParticles?.stop();
+      }
     }
 
-    // 4. Agendar Redemoinho Duplo (M2)
-    if (!this.isWhirlpoolActive && time - this.lastWhirlpoolTime >= this.finalBoss.getConfig().m2Cooldown) {
+    // 4. Atualizar as duas barras de HP
+    this.updateBossBars();
+
+    // 5. Agendar próximo Redemoinho (só quando o anterior sumiu de vez)
+    if (!this.whirlpoolSpinning && this.whirlpoolStrength <= 0 &&
+        time - this.lastWhirlpoolTime >= this.finalBoss.getConfig().m2Cooldown) {
       this.lastWhirlpoolTime = time;
       this.triggerWhirlpoolAttack();
     }
@@ -235,37 +336,40 @@ export class FinalScene extends BossPhaseScene {
   private triggerWhirlpoolAttack(): void {
     if (this.isGameOver || this.finalBoss.isBossDefeated()) return;
 
-    // 1. Mostrar aviso no centro da tela
-    const radius = this.finalBoss.getIsPrime() ? 320 : 250;
-    this.warningCircle = this.add.graphics().setDepth(2).setAlpha(0.1);
-    this.warningCircle.fillStyle(0x00e5ff, 0.4);
-    this.warningCircle.fillCircle(this.whirlpoolCenter.x, this.whirlpoolCenter.y, radius);
-    this.warningCircle.lineStyle(3, 0x00e5ff, 1);
-    this.warningCircle.strokeCircle(this.whirlpoolCenter.x, this.whirlpoolCenter.y, radius);
+    // ── Telegrafo (~2s): os dois PARAM de atirar e um círculo d'água gira rápido ──
+    this.finalBoss.setAttacksPaused(true);
 
-    this.tweens.add({
-      targets: this.warningCircle,
-      alpha: 0.4,
-      duration: 250,
-      yoyo: true,
-      repeat: 3,
-    });
+    const swirl = this.buildWhirlpoolSwirl();
+    this.whirlpoolSwirl = swirl;
+    swirl.setScale(0.2).setAlpha(0);
+    this.tweens.add({ targets: swirl, alpha: 1, scale: 1, duration: FinalScene.WHIRLPOOL_WINDUP_MS, ease: 'Quad.easeIn' });
+    this.tweens.add({ targets: swirl, angle: 360, duration: 360, repeat: -1 }); // gira rápido
 
-    // 2. Transicionar chefes para o centro e começar giro
+    this.time.delayedCall(FinalScene.WHIRLPOOL_WINDUP_MS, () => this.startWhirlpoolSpin());
+  }
+
+  /** Após o telegrafo: chefes vão ao centro, giram e sugam. */
+  private startWhirlpoolSpin(): void {
+    this.finalBoss.setAttacksPaused(false); // fim do telegrafo; o giro já impede tiros
+    if (this.isGameOver || this.finalBoss.isBossDefeated()) {
+      this.fadeWhirlpoolSwirl();
+      return;
+    }
+
     this.tweens.add({
       targets: this.finalBoss,
       x: this.whirlpoolCenter.x,
       y: this.whirlpoolCenter.y,
-      duration: 800,
+      duration: 700,
       ease: 'Quad.easeInOut',
       onComplete: () => {
         if (this.isGameOver || this.finalBoss.isBossDefeated()) {
-          this.warningCircle?.destroy();
+          this.fadeWhirlpoolSwirl();
           return;
         }
 
-        this.isWhirlpoolActive = true;
-        this.warningCircle?.destroy();
+        this.whirlpoolSpinning = true;
+        this.whirlpoolStrength = 1;
         this.whirlpoolParticles?.start();
 
         // Chefes giram no centro
@@ -275,8 +379,10 @@ export class FinalScene extends BossPhaseScene {
           duration: 3000,
           onComplete: () => {
             this.finalBoss.setAngle(0);
-            this.isWhirlpoolActive = false;
+            this.whirlpoolSpinning = false;
+            this.whirlpoolStrength = 0; // janela de ejeção — sucção desligada
             this.whirlpoolParticles?.stop();
+            this.fadeWhirlpoolSwirl();
 
             // Retornar ao posto original
             this.tweens.add({
@@ -291,10 +397,24 @@ export class FinalScene extends BossPhaseScene {
               // Lançar Plankton em parábola (GDD)
               const throwDir = this.plankton.x > this.whirlpoolCenter.x ? -1 : 1;
               (this.plankton.body as Phaser.Physics.Arcade.Body).setVelocity(throwDir * 480, -360);
-              
+
               if (this.plankton.receiveDamage(1)) {
                 this.updateHUD();
               }
+
+              // Ao ser cuspido: só um POUCO mais lento (e nada de ficar preso)
+              this.plankton.applySlowEffect(1100, 0.78);
+              const slowLabel = this.add
+                .text(this.plankton.x, this.plankton.y - 60, '◆ LENTO! ◆', display(13, COLORS_CSS.cyan))
+                .setOrigin(0.5)
+                .setDepth(15);
+              this.tweens.add({
+                targets: slowLabel,
+                y: slowLabel.y - 18,
+                alpha: 0,
+                duration: 2000,
+                onComplete: () => slowLabel.destroy(),
+              });
 
               // Ativar janela de vulnerabilidade (GDD: 2 segundos)
               this.finalBoss.setVulnerable(true);
@@ -313,11 +433,35 @@ export class FinalScene extends BossPhaseScene {
                   this.finalBoss.setVulnerable(false);
                 }
               });
+              // Sem sucção residual: ao terminar, o Plankton fica livre na hora.
             }
           }
         });
       }
     });
+  }
+
+  /** Círculo de água girando (estilo onda do Bob, mas circular) — telegrafo. */
+  private buildWhirlpoolSwirl(): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics().setDepth(8);
+    const D = Math.PI / 180;
+    // Poça de água translúcida
+    g.fillStyle(0x0c90e2, 0.16); g.fillCircle(0, 0, 92);
+    g.fillStyle(0x42e0c7, 0.12); g.fillCircle(0, 0, 60);
+    // Braços espirais (arcos abertos) em tons de água + brilho branco
+    g.lineStyle(9, 0x0c90e2, 0.85); g.beginPath(); g.arc(0, 0, 82, 0, 250 * D, false); g.strokePath();
+    g.lineStyle(8, 0x42e0c7, 0.90); g.beginPath(); g.arc(0, 0, 60, 120 * D, 360 * D, false); g.strokePath();
+    g.lineStyle(5, 0xffffff, 0.50); g.beginPath(); g.arc(0, 0, 40, 60 * D, 320 * D, false); g.strokePath();
+    g.lineStyle(3, 0xe0f7ff, 0.65); g.beginPath(); g.arc(0, 0, 82, 190 * D, 300 * D, false); g.strokePath();
+    g.setPosition(this.whirlpoolCenter.x, this.whirlpoolCenter.y);
+    return g;
+  }
+
+  private fadeWhirlpoolSwirl(): void {
+    const s = this.whirlpoolSwirl;
+    this.whirlpoolSwirl = null;
+    if (!s) return;
+    this.tweens.add({ targets: s, alpha: 0, scale: 1.5, duration: 500, onComplete: () => s.destroy() });
   }
 
   // ── Texturas Dinâmicas ────────────────────────────────────────

@@ -93,6 +93,34 @@ export class EndingScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#040a18');
     fadeInScene(this, 800);
 
+    // Fundo ilustrado do final + scrim escuro p/ o texto continuar legível.
+    // No Final C (fantoche), o texto/créditos passam sobre a FENDA DESTRUÍDA
+    // com um lento afastamento (zoom-out); o trono só aparece no fim.
+    const isFantoche = this.endingId === 'fantoche';
+    const bgKey = isFantoche ? 'end-traido' : ({
+      'redencao': 'end-redencao',
+      'desejo-traido': 'end-traido',
+      'fantoche': 'end-traido',
+    } as Record<EndingId, string>)[this.endingId];
+
+    if (bgKey && this.textures.exists(bgKey)) {
+      const bg = this.add.image(width / 2, height / 2, bgKey).setDepth(-10);
+      if (isFantoche) {
+        // Cobre com margem (sem bordas) e dá um zoom-out: começa MAIOR e
+        // vai ao normal, dando a impressão de a câmera se afastar do centro.
+        bg.setDisplaySize(width * 1.08, height * 1.08);
+        const baseSX = bg.scaleX, baseSY = bg.scaleY;
+        bg.setScale(baseSX * 1.2, baseSY * 1.2);
+        this.tweens.add({
+          targets: bg,
+          scaleX: baseSX, scaleY: baseSY,
+          duration: 24000,
+          ease: 'Sine.easeOut',
+        });
+      }
+      this.add.rectangle(width / 2, height / 2, width, height, 0x040a18, 0.62).setDepth(-9);
+    }
+
     // Efeito de partículas (bolhas flutuantes)
     const dot = makeParticleDot(this);
     this.add.particles(0, 0, dot, {
@@ -244,33 +272,52 @@ export class EndingScene extends Phaser.Scene {
       duration: 7000,
       ease: 'Linear',
       onComplete: () => {
-        const backPrompt = this.add
-          .text(cx, height - 70, '[ENTER] Voltar ao Menu Principal', mono(14, COLORS_CSS.gold))
-          .setOrigin(0.5)
-          .setDepth(30);
-
-        this.tweens.add({
-          targets: backPrompt,
-          alpha: 0.45,
-          duration: 600,
-          yoyo: true,
-          repeat: -1,
-        });
-
-        // Ouvinte de teclado final
-        const onFinalEnter = (e: KeyboardEvent) => {
-          if (e.key === 'Enter') {
-            window.removeEventListener('keydown', onFinalEnter);
-            GameState.getInstance().reset();
-            fadeToScene(this, 'MenuScene', undefined, 600);
-          }
-        };
-        window.addEventListener('keydown', onFinalEnter);
-
-        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-          window.removeEventListener('keydown', onFinalEnter);
-        });
+        if (this.endingId === 'fantoche') {
+          // Final C: apagão escuro e então o Plankton no trono
+          this.revealFantocheThrone(() => this.addBackPrompt());
+        } else {
+          this.addBackPrompt();
+        }
       },
+    });
+  }
+
+  /** Final C: escurece tudo (apagão) e revela a imagem do Plankton no trono. */
+  private revealFantocheThrone(after: () => void): void {
+    const { width, height } = this.scale;
+    const black = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0).setDepth(40);
+    this.tweens.add({
+      targets: black,
+      alpha: 1,
+      duration: 1000,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        if (!this.textures.exists('end-fantoche')) { after(); return; }
+        const throne = this.add.image(width / 2, height / 2, 'end-fantoche').setDepth(41).setAlpha(0);
+        this.tweens.add({ targets: throne, alpha: 1, duration: 1300, delay: 500, onComplete: after });
+      },
+    });
+  }
+
+  private addBackPrompt(): void {
+    const { width, height } = this.scale;
+    const backPrompt = this.add
+      .text(width / 2, height - 70, '[ENTER] Voltar ao Menu Principal', mono(14, COLORS_CSS.gold))
+      .setOrigin(0.5)
+      .setDepth(45);
+
+    this.tweens.add({ targets: backPrompt, alpha: 0.45, duration: 600, yoyo: true, repeat: -1 });
+
+    const onFinalEnter = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        window.removeEventListener('keydown', onFinalEnter);
+        GameState.getInstance().reset();
+        fadeToScene(this, 'MenuScene', undefined, 600);
+      }
+    };
+    window.addEventListener('keydown', onFinalEnter);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('keydown', onFinalEnter);
     });
   }
 

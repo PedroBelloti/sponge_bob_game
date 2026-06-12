@@ -116,6 +116,18 @@ export class Phase2Scene extends BossPhaseScene {
     // Lula pede novas estátuas quando o cooldown vence
     const count = this.lula.tryRequestStatues(time);
     if (count > 0) this.spawnStatues(count, time);
+
+    // Fase final: ao quicar numa parede, a nota ricocheteia EM DIREÇÃO ao Plankton
+    this.bossProjectilePool.getChildren().forEach((o) => {
+      const p = o as Phaser.Physics.Arcade.Sprite;
+      if (!p.active || p.texture.key !== 'lula-note') return;
+      const b = p.body as Phaser.Physics.Arcade.Body;
+      if (b.blocked.left || b.blocked.right || b.blocked.up || b.blocked.down) {
+        const sp = Math.hypot(b.velocity.x, b.velocity.y) || CONSTANTS.LULA_NOTE_SPEED;
+        const a = Phaser.Math.Angle.Between(p.x, p.y, this.plankton.x, this.plankton.y);
+        b.setVelocity(Math.cos(a) * sp, Math.sin(a) * sp);
+      }
+    });
   }
 
   protected onBossFinalPhaseHook(): void {
@@ -178,36 +190,39 @@ export class Phase2Scene extends BossPhaseScene {
 
   private spawnStatues(count: number, time: number): void {
     const { width, height } = this.scale;
-    const groundY = height - 50;
-    const xs = count === 1 ? [width / 2] : [width / 2 - 220, width / 2 + 220];
+    const landingY = height - 50 - 45;
+    const FALL_MS = 600;
 
-    xs.forEach((x) => {
-      const c = this.add.container(x, groundY - 45).setDepth(5);
-      const img = this.add.image(0, 0, 'lula-statue');
-      c.add(img);
+    for (let i = 0; i < count; i++) {
+      const x = Phaser.Math.Between(180, width - 180);
+      const c = this.add.container(x, -70).setDepth(5); // nasce no céu
+      c.add(this.add.image(0, 0, 'lula-statue'));
 
-      // Piscar acelerado conta o tempo até a explosão
-      this.tweens.add({
-        targets: c, alpha: 0.45, duration: 220, yoyo: true, repeat: -1,
+      // Cai do céu até o chão
+      this.tweens.add({ targets: c, y: landingY, duration: FALL_MS, ease: 'Quad.easeIn' });
+      // Piscar acelerado (começa após pousar) — conta o tempo até a explosão
+      this.time.delayedCall(FALL_MS, () => {
+        if (c.active) this.tweens.add({ targets: c, alpha: 0.45, duration: 220, yoyo: true, repeat: -1 });
       });
 
-      // Anel de countdown acima da estátua — encolhe e esquenta até o estouro
       const ring = this.add.graphics().setDepth(6);
-
       this.statues.push({
         container: c,
         ring,
         hp: CONSTANTS.LULA_STATUE_HP,
-        spawnedAt: time,
-        explodeAt: time + CONSTANTS.LULA_STATUE_COUNTDOWN_MS,
+        spawnedAt: time + FALL_MS, // countdown começa ao pousar
+        explodeAt: time + FALL_MS + CONSTANTS.LULA_STATUE_COUNTDOWN_MS,
         x,
-        y: groundY - 45,
+        y: landingY,
       });
-    });
+    }
   }
 
   private updateStatues(time: number): void {
     if (this.statues.length === 0) return;
+
+    // A estátua acompanha a posição atual (enquanto cai do céu)
+    this.statues.forEach((s) => { s.y = s.container.y; });
 
     // Lasers do Plankton destroem estátuas (GDD: destruível ou evitável)
     this.plankton.getProjectileGroup().getChildren().forEach((obj) => {
@@ -237,7 +252,7 @@ export class Phase2Scene extends BossPhaseScene {
         this.explodeStatue(statue);
         return false;
       }
-      this.drawStatueRing(statue, time);
+      if (time >= statue.spawnedAt) this.drawStatueRing(statue, time); // só após pousar
       return true;
     });
   }
@@ -368,18 +383,18 @@ export class Phase2Scene extends BossPhaseScene {
       g.destroy();
     }
 
-    // Nota musical com glow violeta assado: halo + cabeça + haste + core
+    // Nota musical com glow violeta assado — projétil grande (halo+cabeça+haste)
     if (!this.textures.exists('lula-note')) {
       const p = ATTACK_PALETTES.lula;
       const g = this.add.graphics();
       g.fillStyle(p.halo, 0.3);
-      g.fillCircle(10, 10, 10);
+      g.fillCircle(18, 18, 18);
       g.fillStyle(p.mid, 0.95);
-      g.fillEllipse(8, 13, 10, 8);
-      g.fillRect(12, 3, 2, 10);
+      g.fillEllipse(15, 23, 18, 14);
+      g.fillRect(22, 6, 4, 18);
       g.fillStyle(p.core, 1);
-      g.fillEllipse(8, 13, 5, 4);
-      g.generateTexture('lula-note', 20, 20);
+      g.fillEllipse(15, 23, 9, 7);
+      g.generateTexture('lula-note', 36, 36);
       g.destroy();
     }
 
