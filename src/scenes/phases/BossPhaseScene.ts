@@ -4,7 +4,7 @@ import { EventBus } from '../../core/EventBus';
 import type { BossId } from '../../core/EventBus';
 import { Plankton } from '../../entities/Plankton';
 import type { WASDKeys } from '../../entities/PlayerBase';
-import type { BaseBoss, ProjectileData } from '../../entities/bosses/BaseBoss';
+import type { BaseBoss, ProjectileData, BossPerch } from '../../entities/bosses/BaseBoss';
 import type { DialogConfig } from '../DialogScene';
 import { GameState } from '../../state/GameState';
 import { SkillCharge } from '../../systems/SkillCharge';
@@ -106,6 +106,9 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     this.buildArena(width, height);
     this.boss = this.createBoss(width, height);
     this.boss.setDepth(2);
+    if (this.boss.usesGroundMovement()) {
+      this.configureBossMovement(width, height);
+    }
     this.buildBossHpBar(width);
     this.buildPlankton(height);
     this.bossProjectilePool = this.physics.add.group({
@@ -256,6 +259,33 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     body.checkCollision.right = false;
   }
 
+  /**
+   * Monta as poleiras do boss a partir dos corpos de física já criados:
+   * o chão e as plataformas do lado direito da arena (mantém o boss à direita).
+   * O `y` de cada poleira é o CENTRO do boss = topo da superfície − feetOffset.
+   */
+  private configureBossMovement(width: number, height: number): void {
+    const foot = this.boss.getFeetOffset();
+    const perches: BossPerch[] = [];
+
+    // Chão (patrulha restrita ao terço direito p/ não invadir a área do player)
+    const groundChild = this.ground.getChildren()[0] as Phaser.Physics.Arcade.Sprite | undefined;
+    const groundTop = groundChild?.body ? (groundChild.body as Phaser.Physics.Arcade.StaticBody).top : height - 50;
+    perches.push({ y: groundTop - foot, xMin: width * 0.6, xMax: width - 95 });
+
+    // Plataformas do lado direito viram poleiras alcançáveis
+    this.platforms.getChildren().forEach((obj) => {
+      const s = obj as Phaser.Physics.Arcade.Sprite;
+      const body = s.body as Phaser.Physics.Arcade.StaticBody | null;
+      if (!body || s.x < width * 0.52) return;
+      const xMin = Math.min(body.left + 20, body.right - 5);
+      const xMax = Math.max(body.right - 20, body.left + 5);
+      perches.push({ y: body.top - foot, xMin, xMax });
+    });
+
+    this.boss.configureGroundMovement(perches, this.boss.x);
+  }
+
   // ── Texturas comuns ───────────────────────────────────────────
 
   private buildCommonTextures(): void {
@@ -320,6 +350,7 @@ export abstract class BossPhaseScene extends Phaser.Scene {
     p.setData('effect', data.effect ?? null);
     p.setData('trailTint', data.trailTint ?? this.getBossPalette().mid);
     const body = p.body as Phaser.Physics.Arcade.Body;
+    body.enable = true; // pool reusa sprites desativados — reabilita a física
     body.reset(data.x, data.y);
     body.setAllowGravity(data.gravity ?? false);
     body.setVelocity(data.velocityX, data.velocityY);
@@ -337,7 +368,13 @@ export abstract class BossPhaseScene extends Phaser.Scene {
 
   protected deactivateBossProjectile(p: Phaser.Physics.Arcade.Sprite): void {
     p.setActive(false).setVisible(false);
-    (p.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    const body = p.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    // CRÍTICO: o overlap do Arcade percorre os corpos *habilitados* do grupo —
+    // `active=false` não basta. Sem desabilitar o corpo, o projétil fica
+    // invisível e parado mas ainda colide, re-aplicando dano se o player passa
+    // pelo local onde foi atingido. Desabilitar tira o corpo do mundo de física.
+    body.enable = false;
   }
 
   private cullBossProjectiles(time: number): void {

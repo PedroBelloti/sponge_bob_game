@@ -88,9 +88,12 @@ export class LulaMolusco extends BaseBoss {
   }
 
   buildVisual(): void {
-    const sprite = this.scene.add.sprite(0, 0, 'lula-boss');
-    sprite.setDisplaySize(97, 130);
+    // dx=-15: o corpo/pernas ficam à direita do recorte e a clarineta se
+    // estende à esquerda — desloca p/ centrar o corpo na hitbox.
+    const sprite = this.scene.add.sprite(-15, 0, 'lula-boss');
+    sprite.setDisplaySize(138, 163);
     this.add(sprite);
+    this.feetOffset = sprite.displayHeight / 2; // habilita patrulha/pulo
 
     const label = this.scene.add
       .text(0, -88, 'LULA MOLUSCO', {
@@ -188,6 +191,6 @@ export class LulaMolusco extends BaseBoss {
   }
 
   getHitBounds(): Phaser.Geom.Rectangle {
-    return new Phaser.Geom.Rectangle(this.x - 45, this.y - 65, 90, 130);
+    return new Phaser.Geom.Rectangle(this.x - 56, this.y - 81, 113, 163);
   }
 }

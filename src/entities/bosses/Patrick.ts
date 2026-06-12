@@ -72,9 +72,13 @@ export class Patrick extends BaseBoss {
   }
 
   buildVisual(): void {
-    const sprite = this.scene.add.sprite(0, 0, 'patrick-boss');
-    sprite.setDisplaySize(103, 120);
+    // Sprite espelhado p/ olhar à esquerda (em direção ao player).
+    // dx=-18: o corpo (estrela) ocupa a metade direita do recorte e a
+    // pistola se estende à esquerda — desloca p/ centrar o corpo na hitbox.
+    const sprite = this.scene.add.sprite(-18, 0, 'patrick-boss');
+    sprite.setDisplaySize(134, 150);
     this.add(sprite);
+    this.feetOffset = sprite.displayHeight / 2; // habilita patrulha/pulo
 
     const label = this.scene.add
       .text(0, -80, 'PATRICK', {
@@ -177,7 +181,7 @@ export class Patrick extends BaseBoss {
   }
 
   getHitBounds(): Phaser.Geom.Rectangle {
-    return new Phaser.Geom.Rectangle(this.x - 50, this.y - 60, 100, 120);
+    return new Phaser.Geom.Rectangle(this.x - 63, this.y - 75, 125, 150);
   }
 
   // ── Telegraph visual ──────────────────────────────────────────

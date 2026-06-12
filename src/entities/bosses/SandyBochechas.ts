@@ -111,9 +111,12 @@ export class SandyBochechas extends BaseBoss {
   }
 
   buildVisual(): void {
-    const sprite = this.scene.add.sprite(0, 0, 'sandy-boss');
-    sprite.setDisplaySize(134, 110);
+    // dx=-13: a arma de raios se estende à esquerda e a cauda à direita —
+    // desloca p/ centrar o corpo na hitbox.
+    const sprite = this.scene.add.sprite(-13, 0, 'sandy-boss');
+    sprite.setDisplaySize(173, 138);
     this.add(sprite);
+    this.feetOffset = sprite.displayHeight / 2; // habilita patrulha/pulo
 
     const label = this.scene.add
       .text(0, -100, 'SANDY', {
@@ -278,6 +281,6 @@ export class SandyBochechas extends BaseBoss {
   }
 
   getHitBounds(): Phaser.Geom.Rectangle {
-    return new Phaser.Geom.Rectangle(this.x - 40, this.y - 86, 80, 156);
+    return new Phaser.Geom.Rectangle(this.x - 50, this.y - 108, 100, 195);
   }
 }

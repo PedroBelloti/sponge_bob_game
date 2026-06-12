@@ -51,7 +51,7 @@ export class Phase1Scene extends BossPhaseScene {
 
   protected createBoss(_width: number, height: number): BaseBoss {
     // Patrick center: feet at height-50, body height=120 → center at height-110
-    this.patrick = new Patrick(this, 1000, height - 110);
+    this.patrick = new Patrick(this, 1000, height - 125);
     return this.patrick;
   }
 

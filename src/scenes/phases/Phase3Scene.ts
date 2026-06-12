@@ -71,7 +71,7 @@ export class Phase3Scene extends BossPhaseScene {
 
   protected createBoss(_width: number, height: number): BaseBoss {
     // Sandy: pés no chão (height-50), corpo até y+70 → centro em height-120
-    this.sandy = new SandyBochechas(this, 1020, height - 120);
+    this.sandy = new SandyBochechas(this, 1020, height - 134);
     return this.sandy;
   }
 

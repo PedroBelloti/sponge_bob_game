@@ -68,7 +68,7 @@ export class Phase2Scene extends BossPhaseScene {
 
   protected createBoss(_width: number, height: number): BaseBoss {
     // Lula: corpo 130 de altura, pés no palco (height-50) → centro em height-115
-    this.lula = new LulaMolusco(this, 1020, height - 115);
+    this.lula = new LulaMolusco(this, 1020, height - 131);
     return this.lula;
   }
 
